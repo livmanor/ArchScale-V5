@@ -100,7 +100,7 @@ export const TenantsPage: React.FC = () => {
         emptySubtitle="Register the first tenant to get started"
         rowActions={row => (
           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-            {row.status === 'PENDING' && (
+            {['APPLIED', 'PENDING_REVIEW', 'PENDING'].includes(row.status) && (
               <Button variant="secondary" size="sm" onClick={() => setConfirm({ id: row.id, name: row.name, action: 'approve' })}>Approve</Button>
             )}
             {row.status === 'ACTIVE' && (

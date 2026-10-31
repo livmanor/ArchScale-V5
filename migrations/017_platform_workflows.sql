@@ -181,6 +181,58 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.fn_platform_get_organisation(UUID) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.fn_platform_get_organisation(UUID) TO archscale_app_runtime;
 
+CREATE OR REPLACE FUNCTION public.fn_platform_create_organisation(
+    p_name TEXT,
+    p_tenant_type_key TEXT
+)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions, pg_temp
+AS $$
+DECLARE
+    v_context_id UUID;
+    v_organisation_id UUID;
+BEGIN
+    v_context_id := fn_current_context_id();
+    IF v_context_id IS NULL OR NOT is_context_valid(v_context_id) THEN
+        RAISE EXCEPTION 'AUTH_CONTEXT_INVALID' USING ERRCODE = 'P0001';
+    END IF;
+    PERFORM fn_assert_not_support_context();
+    IF NOT ('platform.organisations.manage' = ANY(fn_get_effective_permissions())) THEN
+        RAISE EXCEPTION 'AUTH_PERMISSION_DENIED' USING ERRCODE = '42501';
+    END IF;
+    IF p_name IS NULL OR length(btrim(p_name)) < 2 THEN
+        RAISE EXCEPTION 'AUTH_ORGANISATION_NAME_REQUIRED' USING ERRCODE = '22023';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM public.tenant_types WHERE key = p_tenant_type_key AND is_active) THEN
+        RAISE EXCEPTION 'AUTH_TENANT_TYPE_INVALID' USING ERRCODE = '22023';
+    END IF;
+
+    INSERT INTO public.organisations (name, portal, tenant_type_key, status, member_min_aal)
+    VALUES (btrim(p_name), 'subscriber', p_tenant_type_key, 'APPLIED', 'aal2')
+    RETURNING id INTO v_organisation_id;
+
+    INSERT INTO public.workspaces (organisation_id, name, is_default, is_active)
+    VALUES (v_organisation_id, 'Main Workspace', true, true);
+
+    INSERT INTO public.organisation_entitlements (organisation_id, app_key, is_enabled)
+    SELECT v_organisation_id, app_key, true
+      FROM public.app_catalogue
+     WHERE app_key IN ('tasks', 'attendance') AND is_active
+    ON CONFLICT (organisation_id, app_key) DO NOTHING;
+
+    PERFORM fn_audit_append(
+        'platform.org.created', 'organisations', v_organisation_id::text,
+        jsonb_build_object('name', btrim(p_name), 'tenant_type_key', p_tenant_type_key)
+    );
+    RETURN v_organisation_id;
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.fn_platform_create_organisation(TEXT,TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.fn_platform_create_organisation(TEXT,TEXT) TO archscale_app_runtime;
+
 CREATE OR REPLACE FUNCTION public.fn_app_support_context_can_read(p_organisation_id UUID)
 RETURNS BOOLEAN
 LANGUAGE plpgsql
