@@ -22,6 +22,8 @@ const USER_FOUNDER_ID = '80000000-0000-0000-0000-000000000001';
 const USER_OWNER_ID   = '80000000-0000-0000-0000-000000000002';
 const USER_MEMBER_ID  = '80000000-0000-0000-0000-000000000003';
 const USER_STAFF_ID   = '80000000-0000-0000-0000-000000000004';
+const USER_LEADER_ID  = '80000000-0000-0000-0000-000000000005';
+const USER_INTERN_ID  = '80000000-0000-0000-0000-000000000006';
 
 const PLATFORM_ORG_ID = '00000000-0000-0000-0000-000000000001';
 const SUB_ORG_ID      = '80000000-0000-0000-0000-000000000010';
@@ -43,6 +45,12 @@ let staffToken: string;
 let staffSupportGrantId: string;
 let staffSupportContextId: string;
 let staffSessionId: string;
+let leaderToken: string;
+let leaderContextId: string;
+let leaderMembershipId: string;
+let internToken: string;
+let internContextId: string;
+let internMembershipId: string;
 
 beforeAll(async () => {
     process.env.ALLOW_LOCAL_AUTH = 'true';
@@ -59,7 +67,9 @@ beforeAll(async () => {
         { id: USER_FOUNDER_ID, email: 'founder@platform.local', userCode: 'AS-FND01', aal: 'aal2' as const },
         { id: USER_OWNER_ID, email: 'owner@tenant.local', userCode: 'AS-OWN01', aal: 'aal2' as const },
         { id: USER_MEMBER_ID, email: 'member@tenant.local', userCode: 'AS-MBR01', aal: 'aal1' as const },
-        { id: USER_STAFF_ID, email: 'staff@platform.local', userCode: 'AS-STF01', aal: 'aal2' as const }
+        { id: USER_STAFF_ID, email: 'staff@platform.local', userCode: 'AS-STF01', aal: 'aal2' as const },
+        { id: USER_LEADER_ID, email: 'leader@tenant.local', userCode: 'AS-LDR01', aal: 'aal1' as const },
+        { id: USER_INTERN_ID, email: 'intern@tenant.local', userCode: 'AS-INT01', aal: 'aal1' as const }
     ];
 
     for (const u of testUsers) {
@@ -90,6 +100,11 @@ beforeAll(async () => {
 
     await adminPool.query(`INSERT INTO public.app_catalogue (app_key, name) VALUES ('app_model', 'Model App') ON CONFLICT DO NOTHING;`);
     await adminPool.query(`INSERT INTO public.organisation_entitlements (organisation_id, app_key, is_enabled) VALUES ($1, 'app_model', true) ON CONFLICT DO NOTHING;`, [SUB_ORG_ID]);
+    await adminPool.query(`
+        INSERT INTO public.organisation_entitlements (organisation_id, app_key, is_enabled)
+        VALUES ($1, 'tasks', true), ($1, 'attendance', true)
+        ON CONFLICT (organisation_id, app_key) DO UPDATE SET is_enabled = true;
+    `, [SUB_ORG_ID]);
 
     // Memberships
     await adminPool.query(`
@@ -113,6 +128,20 @@ beforeAll(async () => {
         VALUES ($1, $2, 'executive', 'ACTIVE') RETURNING id;
     `, [USER_MEMBER_ID, SUB_ORG_ID]);
     memberMembershipId = mMbr.rows[0].id;
+
+    const mLeader = await adminPool.query(`
+        INSERT INTO public.memberships (user_id, organisation_id, role_key, status, department, job_role)
+        VALUES ($1, $2, 'leader', 'ACTIVE', 'Design', 'Design Manager') RETURNING id;
+    `, [USER_LEADER_ID, SUB_ORG_ID]);
+    leaderMembershipId = mLeader.rows[0].id;
+    const mIntern = await adminPool.query(`
+        INSERT INTO public.memberships (
+            user_id, organisation_id, role_key, status, department, job_role,
+            reporting_manager_membership_id, expires_at
+        ) VALUES ($1, $2, 'intern', 'ACTIVE', 'Design', 'Junior Designer', $3, now() + interval '30 days')
+        RETURNING id;
+    `, [USER_INTERN_ID, SUB_ORG_ID, leaderMembershipId]);
+    internMembershipId = mIntern.rows[0].id;
 
     // Support grant for staff
     const grantRes = await adminPool.query(`
@@ -147,6 +176,18 @@ beforeAll(async () => {
         [USER_STAFF_ID, staffLogin.principal.sessionId, SUB_ORG_ID, workspaceSubId, staffSupportGrantId]);
     staffSupportContextId = sCtx.rows[0].fn_create_access_context;
 
+    const leaderLogin = await localIdp.signIn({ email: 'leader@tenant.local', password: 'test-password' });
+    leaderToken = leaderLogin.accessToken;
+    const lCtx = await adminPool.query(`SELECT fn_create_access_context($1::uuid, $2, $3::uuid, $4::uuid, 'aal1');`,
+        [USER_LEADER_ID, leaderLogin.principal.sessionId, SUB_ORG_ID, workspaceSubId]);
+    leaderContextId = lCtx.rows[0].fn_create_access_context;
+
+    const internLogin = await localIdp.signIn({ email: 'intern@tenant.local', password: 'test-password' });
+    internToken = internLogin.accessToken;
+    const iCtx = await adminPool.query(`SELECT fn_create_access_context($1::uuid, $2, $3::uuid, $4::uuid, 'aal1');`,
+        [USER_INTERN_ID, internLogin.principal.sessionId, SUB_ORG_ID, workspaceSubId]);
+    internContextId = iCtx.rows[0].fn_create_access_context;
+
     // Start server
     server = createServer(localIdp, adminPool);
     await new Promise<void>((resolve) => {
@@ -164,6 +205,49 @@ afterAll(async () => {
 });
 
 describe('Frontstage Tenant Administration APIs (A5)', () => {
+    it('leader can create and assign a task to an intern direct report in the same department', async () => {
+        const createRes = await fetch(`${baseUrl}/api/tasks`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${leaderToken}`,
+                'X-ArchScale-Context': leaderContextId,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                title: 'Leader assigns intern task',
+                description: 'Regression test for direct-report assignment',
+                assignedToId: leaderMembershipId,
+                reviewerId: leaderMembershipId,
+                department: 'Design',
+                priority: 'Normal'
+            })
+        });
+        expect(createRes.status).toBe(201);
+        const created = await createRes.json();
+        const taskId = created.task.id;
+
+        const assignRes = await fetch(`${baseUrl}/api/tasks/${taskId}`, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${leaderToken}`,
+                'X-ArchScale-Context': leaderContextId,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ assignedToId: internMembershipId })
+        });
+        expect(assignRes.status).toBe(200);
+
+        const internTasksRes = await fetch(`${baseUrl}/api/tasks`, {
+            headers: {
+                'Authorization': `Bearer ${internToken}`,
+                'X-ArchScale-Context': internContextId
+            }
+        });
+        expect(internTasksRes.status).toBe(200);
+        const internTasks = await internTasksRes.json();
+        expect(internTasks.tasks.some((task: any) => task.id === taskId && task.assignedToId === internMembershipId)).toBe(true);
+    });
+
     it('1. GET /api/org/members returns member list via fn_list_org_members', async () => {
         const res = await fetch(`${baseUrl}/api/org/members`, {
             headers: {
