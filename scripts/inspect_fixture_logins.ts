@@ -29,7 +29,13 @@ async function main() {
                            'department', m.department,
                            'jobRole', m.job_role,
                            'reportsToRole', manager.role_key,
-                           'reportsToDepartment', manager.department
+                                                     'reportsToDepartment', manager.department,
+                                                     'enabledApps', COALESCE((
+                                                             SELECT array_agg(e.app_key ORDER BY e.app_key)
+                                                                 FROM public.organisation_entitlements e
+                                                                WHERE e.organisation_id = m.organisation_id AND e.is_enabled
+                                                                    AND e.app_key IN ('tasks','attendance')
+                                                     ), ARRAY[]::text[])
                        )) FILTER (WHERE m.status = 'ACTIVE' AND o.status = 'ACTIVE'), '[]'::json) AS active_memberships
                   FROM public.users u
                   LEFT JOIN public.memberships m ON m.user_id = u.id
