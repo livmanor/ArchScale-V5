@@ -632,7 +632,7 @@ export function createServer(
             return res.status(403).json({ error: decision.reasonCode, decision });
         }
         const orgs = await client.query(`SELECT * FROM public.fn_platform_list_organisations();`);
-        return res.status(200).json({ decision, organisations: orgs.rows });
+        return res.status(200).json({ decision, data: orgs.rows, organisations: orgs.rows });
     });
 
     app.get('/api/platform/organisations/:id', authenticate, requireContext, async (req: Request, res: Response) => {
@@ -661,8 +661,11 @@ export function createServer(
         if (!decision.allow) {
             return res.status(403).json({ error: decision.reasonCode, decision });
         }
-        if (typeof body.name !== 'string' || !body.name.trim() || typeof body.adminEmail !== 'string' || !body.adminEmail.trim()) {
-            return res.status(400).json({ error: 'ORGANISATION_NAME_AND_ADMIN_EMAIL_REQUIRED' });
+        if (typeof body.name !== 'string' || !body.name.trim()) {
+            return res.status(400).json({ error: 'ORGANISATION_NAME_REQUIRED' });
+        }
+        if (body.adminEmail !== undefined && (typeof body.adminEmail !== 'string' || !body.adminEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.adminEmail.trim()))) {
+            return res.status(400).json({ error: 'ADMIN_EMAIL_INVALID' });
         }
         try {
             const orgRes = await client.query<{ fn_platform_create_organisation: string }>(
@@ -670,16 +673,19 @@ export function createServer(
                 [body.name.trim(), body.tenantTypeKey || 'studio_owner']
             );
             const organisationId = orgRes.rows[0]?.fn_platform_create_organisation;
-            const rawToken = crypto.randomBytes(32).toString('base64url');
-            const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-            const inviteRes = await client.query<{ fn_platform_invite_tenant_admin_with_hash: string }>(
-                `SELECT fn_platform_invite_tenant_admin_with_hash($1::uuid, $2, $3, NULL);`,
-                [organisationId, body.adminEmail.trim(), tokenHash]
-            );
-            const invitationId = inviteRes.rows[0]?.fn_platform_invite_tenant_admin_with_hash;
-            await sendInvitationMail({ to: body.adminEmail.trim(), rawToken, invitationId, organisationName: body.name.trim() });
-            await client.query(`SELECT fn_mark_invitation_sent($1::uuid);`, [invitationId]);
-            return res.status(201).json({ success: true, organisationId, invitationId });
+            let invitationId: string | undefined;
+            if (body.adminEmail) {
+                const rawToken = crypto.randomBytes(32).toString('base64url');
+                const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+                const inviteRes = await client.query<{ fn_platform_invite_tenant_admin_with_hash: string }>(
+                    `SELECT fn_platform_invite_tenant_admin_with_hash($1::uuid, $2, $3, NULL);`,
+                    [organisationId, body.adminEmail.trim(), tokenHash]
+                );
+                invitationId = inviteRes.rows[0]?.fn_platform_invite_tenant_admin_with_hash;
+                await sendInvitationMail({ to: body.adminEmail.trim(), rawToken, invitationId, organisationName: body.name.trim() });
+                await client.query(`SELECT fn_mark_invitation_sent($1::uuid);`, [invitationId]);
+            }
+            return res.status(200).json({ success: true, organisationId, invitationId });
         } catch (err: any) {
             return res.status(400).json({ error: err.message });
         }

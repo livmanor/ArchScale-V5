@@ -123,7 +123,8 @@ export async function createIsolatedTestDatabase(testDbName: string): Promise<pg
     // Apply seed data
     const seedFiles = [
         '001_seed_initial_data.sql',
-        '002_phase2_permissions.sql'
+        '002_phase2_permissions.sql',
+        '003_app_module_permissions.sql'
     ];
 
     for (const seedFile of seedFiles) {
