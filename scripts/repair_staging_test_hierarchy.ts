@@ -13,9 +13,8 @@ for (const line of fs.readFileSync('.env', 'utf8').split(/\r?\n/)) {
 }
 
 async function main() {
-    if (!process.argv.includes('--confirm-staging')) {
-        throw new Error('Refusing to modify staging without --confirm-staging.');
-    }
+    const dryRun = process.argv.includes('--dry-run');
+    if (!dryRun && !process.argv.includes('--confirm-staging')) throw new Error('Refusing to modify staging without --confirm-staging.');
     if (process.env.ARCHSCALE_ENV !== 'staging' || process.env.ARCHSCALE_STAGING_PROJECT_REF !== EXPECTED_PROJECT_REF) {
         throw new Error('Configured staging project does not match the expected target.');
     }
@@ -123,8 +122,13 @@ async function main() {
             throw new Error('Post-update hierarchy verification failed.');
         }
 
-        await client.query('COMMIT');
-        console.log('STAGING_FIXTURE_REPAIR_SUCCEEDED');
+        if (dryRun) {
+            await client.query('ROLLBACK');
+            console.log('STAGING_FIXTURE_REPAIR_DRY_RUN_PASSED; transaction rolled back; no changes persisted.');
+        } else {
+            await client.query('COMMIT');
+            console.log('STAGING_FIXTURE_REPAIR_SUCCEEDED');
+        }
         console.log(JSON.stringify({ leaderMembershipId: pair.leader_membership_id, internMembershipId: pair.intern_membership_id,
             tenantChanged: pair.intern_organisation_id !== pair.leader_organisation_id,
             departments: [verified.leader_department, verified.intern_department],
