@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  signIn, signInByCode, verifyMfa,
+  signIn, signInByCode, verifyMfa, recovery, resetPassword,
   setToken, setRefreshToken, setContextId,
 } from '../../api/client';
 import type { SessionData } from '../../hooks/useSession';
@@ -16,6 +16,17 @@ interface LoginProps {
 export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [resetToken] = useState(() => {
+    const fragment = new URLSearchParams(window.location.hash.slice(1));
+    return fragment.get('type') === 'recovery' ? fragment.get('access_token') : null;
+  });
+  const [recoveryMode, setRecoveryMode] = useState<'login' | 'request' | 'reset'>(() => {
+    const fragment = new URLSearchParams(window.location.hash.slice(1));
+    return fragment.get('type') === 'recovery' && fragment.has('access_token') ? 'reset' : 'login';
+  });
 
   // MFA step
   const [mfaSession, setMfaSession] = useState<{ token: string; email: string } | null>(null);
@@ -67,6 +78,31 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     finaliseSession(res.data as any);
+  };
+
+  const handleRecoveryRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    const result = await recovery(recoveryEmail.trim());
+    setLoading(false);
+    if (!result.ok) { setError(result.message); return; }
+    setNotice('If the address is registered, a recovery link has been sent.');
+    setRecoveryMode('login');
+  };
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetToken) { setError('This recovery link is invalid or expired. Request a new link.'); return; }
+    setLoading(true);
+    setError(null);
+    const result = await resetPassword(resetToken, newPassword);
+    setLoading(false);
+    if (!result.ok) { setError(result.message); return; }
+    window.history.replaceState(null, '', '/');
+    setNewPassword('');
+    setNotice('Password updated. Sign in with your new password.');
+    setRecoveryMode('login');
   };
 
   const handleMfaVerify = async (e: React.FormEvent) => {
@@ -146,8 +182,11 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
       </div>
 
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 24px' }}>
-        <h1 style={{ fontSize: 'var(--font-size-h1)', marginBottom: 24 }}>Sign in</h1>
+        <h1 style={{ fontSize: 'var(--font-size-h1)', marginBottom: 24 }}>
+          {recoveryMode === 'request' ? 'Reset your password' : recoveryMode === 'reset' ? 'Choose a new password' : 'Sign in'}
+        </h1>
 
+        {notice && <Alert kind="info" style={{ marginBottom: 20 }}>{notice}</Alert>}
         {error && <Alert kind="error" style={{ marginBottom: 20 }}>{error}</Alert>}
 
         {/* Loading overlay */}
@@ -158,7 +197,30 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
           </div>
         )}
 
-        {!loading && (
+        {!loading && recoveryMode === 'request' && (
+          <div style={{ maxWidth: 420 }}>
+            <form onSubmit={handleRecoveryRequest}>
+              <FormField label="Email Address" required>
+                <TextInput type="email" autoComplete="email" value={recoveryEmail} onChange={event => setRecoveryEmail(event.target.value)} required />
+              </FormField>
+              <Button type="submit" loading={loading} style={{ width: '100%' }}>Send recovery link</Button>
+              <button type="button" onClick={() => setRecoveryMode('login')} style={{ marginTop: 14, background: 'none', border: 0, color: 'var(--color-accent)', cursor: 'pointer' }}>Back to sign in</button>
+            </form>
+          </div>
+        )}
+
+        {!loading && recoveryMode === 'reset' && (
+          <div style={{ maxWidth: 420 }}>
+            <form onSubmit={handlePasswordReset}>
+              <FormField label="New Password" required hint="Use at least 12 characters.">
+                <TextInput type="password" autoComplete="new-password" minLength={12} value={newPassword} onChange={event => setNewPassword(event.target.value)} required />
+              </FormField>
+              <Button type="submit" loading={loading} style={{ width: '100%' }}>Update password</Button>
+            </form>
+          </div>
+        )}
+
+        {!loading && recoveryMode === 'login' && (
           <div style={{ maxWidth: 420 }}>
             <form onSubmit={handleManualLogin}>
               <FormField label="Email or User Code" required>
@@ -184,7 +246,7 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
                 Sign In
               </Button>
               <div style={{ marginTop: 14, fontSize: 'var(--font-size-sm)' }}>
-                <a href="/forgot-password">Forgot password?</a>
+                <a href="/forgot-password" onClick={event => { event.preventDefault(); setNotice(null); setError(null); setRecoveryMode('request'); }}>Forgot password?</a>
               </div>
             </form>
           </div>

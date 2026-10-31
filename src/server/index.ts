@@ -75,6 +75,13 @@ export function createServer(
         return res.status(404).send('Not Found');
     });
 
+    app.get(['/recover', '/forgot-password'], (_req: Request, res: Response) => {
+        const filePath = path.join(__dirname, 'public', 'index.html');
+        if (!fs.existsSync(filePath)) return res.status(404).send('Not Found');
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.status(200).send(fs.readFileSync(filePath, 'utf-8'));
+    });
+
     // 1. POST /api/session/sign-in
     app.post('/api/session/sign-in', async (req: Request, res: Response) => {
         const start = Date.now();
