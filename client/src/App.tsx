@@ -17,8 +17,6 @@ import { InvitationsPage } from './pages/frontstage/InvitationsPage';
 import { RolesPermissionsPage } from './pages/frontstage/RolesPermissionsPage';
 import { TenantsPage } from './pages/backstage/TenantsPage';
 
-const BACKSTAGE_ROLES = new Set(['founder', 'platform_admin', 'client_servicing', 'developer', 'accounts']);
-
 export const App: React.FC = () => {
   const { toasts, removeToast } = useToast();
   const [session, setSession] = useState<SessionData | null>(null);
@@ -36,10 +34,9 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('xauth:unauthorized', handleUnauthorized);
   }, []);
 
-  const personaRole = context?.roleKey ?? session?.principal.role;
-  const personaDept = context?.department ?? session?.principal.department ?? '';
-
-  const isBackstage = !!(session && BACKSTAGE_ROLES.has(personaRole ?? ''));
+  const personaRole = context?.roleKey;
+  const personaDept = context?.department ?? '';
+  const isBackstage = context?.portal === 'platform';
   const isTenantAdmin = personaRole === 'business_owner' || personaRole === 'tenant_admin';
   const isHR = personaDept === 'HR';
   const isManager = personaRole === 'leader' || personaRole === 'manager_coordinator';
@@ -80,7 +77,7 @@ export const App: React.FC = () => {
     setContext(ctx);
     setContextId(ctx.contextId);
     setPickingContext(false);
-    setActiveNav(BACKSTAGE_ROLES.has(ctx.roleKey ?? '') ? 'tenants' : 'tasks');
+    setActiveNav(ctx.portal === 'platform' ? 'tenants' : 'tasks');
   };
 
   const handleLogout = async () => {

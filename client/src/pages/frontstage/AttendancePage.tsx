@@ -23,10 +23,9 @@ export const AttendancePage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   // RBAC checks
-  const activeRole = context?.roleKey ?? session?.demoPersona?.role ?? session?.principal.role;
-  const activeDept = context?.department ?? session?.demoPersona?.dept ?? session?.principal.department;
-  const isFounder = activeRole === 'founder';
-  const isHRManager = (activeDept === 'HR' && activeRole !== 'intern') || isFounder;
+  const activeRole = context?.roleKey;
+  const activeDept = context?.department;
+  const isHRManager = activeDept === 'HR' && activeRole === 'manager_coordinator';
   const isJuniorHR = activeDept === 'HR' && activeRole === 'intern';
   const isAuthorized = isHRManager || isJuniorHR;
 

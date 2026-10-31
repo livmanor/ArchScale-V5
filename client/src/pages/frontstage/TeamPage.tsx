@@ -21,15 +21,14 @@ const ROLES = [
 ];
 
 export const TeamPage: React.FC = () => {
-  const { session } = useSession();
+  const { context } = useSession();
   const { toasts, addToast, removeToast } = useToast();
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Derive role
-  const activeRole = session?.demoPersona?.role ?? session?.principal.role;
-  const canManageMembers = activeRole === 'business_owner' || activeRole === 'founder';
+  const canManageMembers = context?.portal === 'subscriber' && context.roleKey === 'business_owner';
 
   // Role drawer
   const [roleDrawer, setRoleDrawer] = useState<any | null>(null);

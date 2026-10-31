@@ -49,9 +49,9 @@ export const TasksPage: React.FC = () => {
   const [statusUpdating, setStatusUpdating] = useState<string | null>(null);
 
   // RBAC resolution
-  const activeRole = context?.roleKey ?? session?.demoPersona?.role ?? session?.principal.role;
-  const activeDept = context?.department ?? session?.demoPersona?.dept ?? session?.principal.department;
-  const activeMemberId = context?.membershipId ?? session?.demoPersona?.memberId ?? session?.principal.id;
+  const activeRole = context?.roleKey;
+  const activeDept = context?.department;
+  const activeMemberId = context?.membershipId;
 
   const isJunior = activeRole === 'intern';
   const isManager = activeRole === 'leader' || activeRole === 'manager_coordinator';
@@ -181,7 +181,7 @@ export const TasksPage: React.FC = () => {
         emptySubtitle={isJunior ? "No tasks currently assigned to you" : "No tasks found for your access scope"}
         emptyAction={canCreateTask ? <Button onClick={() => setDrawerOpen(true)}>New Task</Button> : undefined}
         rowActions={row => {
-          const isOwnAssigned = row.assignedToId === activeMemberId || row.assignedToId === session?.principal.id;
+          const isOwnAssigned = row.assignedToId === activeMemberId;
           const isPeerDesign = activeDept === 'Design' && isManager && !isOwnAssigned && row.reviewerId !== activeMemberId;
 
           // Juniors can only update status on their own task
