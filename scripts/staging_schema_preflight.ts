@@ -35,6 +35,8 @@ async function main() {
                 to_regclass('public.audit_logs') IS NOT NULL AS audit_logs,
                 to_regclass('public.tasks') IS NOT NULL AS tasks,
                 to_regclass('public.attendance_records') IS NOT NULL AS attendance_records,
+                to_regclass('public.app_catalogue') IS NOT NULL AS app_catalogue,
+                to_regclass('public.app_authorization_policies') IS NOT NULL AS app_authorization_policies,
                 to_regclass('supabase_migrations.schema_migrations') IS NOT NULL AS migration_history_table
         `);
         const state = result.rows[0];
@@ -63,14 +65,18 @@ async function main() {
             'fn_app_support_context_can_read', 'fn_app_member_label',
             'fn_revoke_user_access_contexts'
         ]]);
-        const seeded = await client.query(`
-            SELECT
-              (SELECT count(*)::int FROM public.roles) AS roles,
-              (SELECT count(*)::int FROM public.permissions) AS permissions,
-              (SELECT count(*)::int FROM public.app_catalogue WHERE app_key IN ('tasks','attendance')) AS app_modules,
-              (SELECT count(*)::int FROM public.app_authorization_policies) AS app_policies,
-              (SELECT count(*)::int FROM public.role_permissions WHERE permission_key LIKE 'tasks.%' OR permission_key LIKE 'attendance.%') AS app_role_permissions
-        `);
+           const seeded = await client.query(`
+              SELECT
+                (SELECT count(*)::int FROM public.roles) AS roles,
+                (SELECT count(*)::int FROM public.permissions) AS permissions,
+                CASE WHEN to_regclass('public.app_catalogue') IS NOT NULL
+                    THEN (SELECT count(*)::int FROM public.app_catalogue WHERE app_key IN ('tasks','attendance'))
+                    ELSE 0 END AS app_modules,
+                CASE WHEN to_regclass('public.app_authorization_policies') IS NOT NULL
+                    THEN (SELECT count(*)::int FROM public.app_authorization_policies)
+                    ELSE 0 END AS app_policies,
+                (SELECT count(*)::int FROM public.role_permissions WHERE permission_key LIKE 'tasks.%' OR permission_key LIKE 'attendance.%') AS app_role_permissions
+           `);
         let historyCount: number | null = null;
         if (state.migration_history_table) {
             const history = await client.query('SELECT count(*)::int AS count FROM supabase_migrations.schema_migrations');
