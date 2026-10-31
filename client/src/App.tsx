@@ -16,6 +16,8 @@ import { AttendancePage } from './pages/frontstage/AttendancePage';
 import { InvitationsPage } from './pages/frontstage/InvitationsPage';
 import { RolesPermissionsPage } from './pages/frontstage/RolesPermissionsPage';
 import { TenantsPage } from './pages/backstage/TenantsPage';
+import { AuditLogPage } from './pages/backstage/AuditLogPage';
+import { SupportAccessPage } from './pages/backstage/SupportAccessPage';
 
 export const App: React.FC = () => {
   const { toasts, removeToast } = useToast();
@@ -96,8 +98,8 @@ export const App: React.FC = () => {
       switch (activeNav) {
         case 'tenants': return <TenantsPage />;
         case 'roles':   return <RolesPermissionsPage />;
-        case 'audit':   return <PlaceholderPage icon="🔍" title="Audit Log" />;
-        case 'support': return <PlaceholderPage icon="🔧" title="Support Access" />;
+        case 'audit':   return <AuditLogPage />;
+        case 'support': return <SupportAccessPage />;
         default:        return <TenantsPage />;
       }
     }
@@ -166,12 +168,3 @@ export const App: React.FC = () => {
   );
 };
 
-const PlaceholderPage: React.FC<{ icon: string; title: string }> = ({ icon, title }) => (
-  <div className="page-body">
-    <div style={{ padding: '56px 0', textAlign: 'center', color: 'var(--color-text-muted)' }}>
-      <div style={{ fontSize: 36, marginBottom: 14, opacity: 0.3 }}>{icon}</div>
-      <div style={{ fontWeight: 600, fontSize: 'var(--font-size-md)', color: 'var(--color-text)', marginBottom: 6 }}>{title}</div>
-      <div style={{ fontSize: 'var(--font-size-sm)' }}>Coming soon</div>
-    </div>
-  </div>
-);
