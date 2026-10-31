@@ -16,7 +16,8 @@ async function main() {
     const projectRef = process.env.ARCHSCALE_STAGING_PROJECT_REF;
     const apiUrl = process.env.SUPABASE_URL;
     const adminUrl = process.env.SUPABASE_DB_ADMIN_URL;
-    if (!projectRef || !apiUrl || !adminUrl) throw new Error('Required staging configuration is missing.');
+    const runtimeUrl = process.env.ARCHSCALE_RUNTIME_DB_URL;
+    if (!projectRef || !apiUrl || !adminUrl || !runtimeUrl) throw new Error('Required staging configuration is missing.');
 
     const apiHost = new URL(apiUrl).hostname;
     const adminUser = decodeURIComponent(new URL(adminUrl).username);
@@ -25,7 +26,9 @@ async function main() {
     }
 
     const client = new pg.Client({ connectionString: adminUrl, ssl: { rejectUnauthorized: false } });
+    const runtimeClient = new pg.Client({ connectionString: runtimeUrl, ssl: { rejectUnauthorized: false } });
     await client.connect();
+    await runtimeClient.connect();
     try {
         await client.query('BEGIN TRANSACTION READ ONLY');
         const result = await client.query(`
@@ -115,6 +118,19 @@ async function main() {
                                 has_table_privilege('authenticated', 'public.' || table_name, 'SELECT') AS authenticated_select
                             FROM unnest(ARRAY['tasks','attendance_records','attendance_comments']::text[]) AS table_name
                         `);
+                        await runtimeClient.query('BEGIN TRANSACTION READ ONLY');
+                        const runtimeCheck = await runtimeClient.query(`
+                            SELECT current_user,
+                                   has_table_privilege(current_user, 'public.tasks', 'SELECT') AS tasks_select,
+                                   has_table_privilege(current_user, 'public.tasks', 'INSERT') AS tasks_insert,
+                                   has_table_privilege(current_user, 'public.tasks', 'DELETE') AS tasks_delete,
+                                   has_table_privilege(current_user, 'public.attendance_records', 'SELECT') AS attendance_select,
+                                   has_table_privilege(current_user, 'public.attendance_records', 'INSERT') AS attendance_insert,
+                                   has_table_privilege(current_user, 'public.attendance_comments', 'INSERT') AS comments_insert,
+                                   has_function_privilege(current_user, 'public.fn_app_record_allowed(text,text,uuid,text,uuid,uuid,uuid)', 'EXECUTE') AS app_policy_execute,
+                                   has_function_privilege(current_user, 'public.fn_revoke_user_access_contexts(uuid)', 'EXECUTE') AS recovery_revoke_execute
+                        `);
+                        await runtimeClient.query('ROLLBACK');
         const functions = await client.query(`
             SELECT proname FROM pg_proc p
             JOIN pg_namespace n ON n.oid = p.pronamespace
@@ -174,6 +190,7 @@ async function main() {
             appDataShape: dataShape.rows[0],
             existingAppPolicies: appPolicies.rows,
             appTablePrivileges: privileges.rows,
+            runtimeCheck: runtimeCheck.rows[0],
             requiredFunctions: functions.rows.map((row: { proname: string }) => row.proname),
             seeded,
             rowCounts,
@@ -186,6 +203,7 @@ async function main() {
         process.exitCode = 1;
     } finally {
         await client.end();
+        await runtimeClient.end();
     }
 }
 
