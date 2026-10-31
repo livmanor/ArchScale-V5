@@ -174,6 +174,10 @@ ALTER TABLE public.attendance_comments
     ADD COLUMN IF NOT EXISTS organisation_id UUID REFERENCES public.organisations(id) ON DELETE RESTRICT,
     ADD COLUMN IF NOT EXISTS body TEXT;
 
+-- The legacy comments table is append-only. Temporarily remove only its
+-- mutation-rejection trigger for this schema-only backfill, then restore it.
+DROP TRIGGER IF EXISTS trg_prevent_attendance_comment_update ON public.attendance_comments;
+
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='attendance_comments' AND column_name='attendance_id') THEN
@@ -195,6 +199,16 @@ ALTER TABLE public.attendance_comments
     ALTER COLUMN attendance_record_id SET NOT NULL,
     ALTER COLUMN organisation_id SET NOT NULL,
     ALTER COLUMN body SET NOT NULL;
+
+DO $$
+BEGIN
+    IF to_regprocedure('public.fn_prevent_attendance_comment_mutation()') IS NOT NULL THEN
+        CREATE TRIGGER trg_prevent_attendance_comment_update
+            BEFORE UPDATE OR DELETE ON public.attendance_comments
+            FOR EACH ROW EXECUTE FUNCTION public.fn_prevent_attendance_comment_mutation();
+    END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS attendance_comments_record ON public.attendance_comments(attendance_record_id, created_at);
 
 CREATE TABLE IF NOT EXISTS public.app_record_audit (
