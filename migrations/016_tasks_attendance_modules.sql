@@ -46,6 +46,7 @@ ALTER TABLE public.tasks
     ADD COLUMN IF NOT EXISTS organisation_id UUID REFERENCES public.organisations(id) ON DELETE RESTRICT,
     ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES public.workspaces(id) ON DELETE RESTRICT,
     ADD COLUMN IF NOT EXISTS title TEXT,
+    ADD COLUMN IF NOT EXISTS reporting_manager_membership_id UUID REFERENCES public.memberships(id) ON DELETE SET NULL,
     ADD COLUMN IF NOT EXISTS reviewer_membership_id UUID REFERENCES public.memberships(id) ON DELETE RESTRICT,
     ADD COLUMN IF NOT EXISTS due_at TIMESTAMPTZ;
 

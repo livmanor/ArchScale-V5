@@ -82,16 +82,18 @@ async function main() {
         `, [studioOrgId]);
         const studioWsId = studioWsRes.rows[0].id;
 
-        // Ensure core_billing exists in app_catalogue
+        // Ensure fixture tenants can use the persisted app modules.
         await pgAdmin.query(`
             INSERT INTO public.app_catalogue (app_key, name)
             VALUES ('core_billing', 'Core Billing')
             ON CONFLICT (app_key) DO NOTHING;
         `);
-
         await pgAdmin.query(`
             INSERT INTO public.organisation_entitlements (organisation_id, app_key, is_enabled)
-            VALUES ($1, 'core_billing', true) ON CONFLICT DO NOTHING;
+            SELECT $1, app_key, true
+              FROM public.app_catalogue
+             WHERE app_key IN ('core_billing', 'tasks', 'attendance')
+            ON CONFLICT (organisation_id, app_key) DO UPDATE SET is_enabled = true;
         `, [studioOrgId]);
 
         // 2. Project Owner Org for intern
@@ -111,7 +113,10 @@ async function main() {
 
         await pgAdmin.query(`
             INSERT INTO public.organisation_entitlements (organisation_id, app_key, is_enabled)
-            VALUES ($1, 'core_billing', true) ON CONFLICT DO NOTHING;
+            SELECT $1, app_key, true
+              FROM public.app_catalogue
+             WHERE app_key IN ('core_billing', 'tasks', 'attendance')
+            ON CONFLICT (organisation_id, app_key) DO UPDATE SET is_enabled = true;
         `, [projOrgId]);
 
         // Platform org
