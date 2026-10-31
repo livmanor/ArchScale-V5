@@ -88,6 +88,17 @@ async function main() {
             const count = await client.query("SELECT count(*)::int AS count FROM public.role_permissions WHERE permission_key LIKE 'tasks.%' OR permission_key LIKE 'attendance.%'");
             seeded.appRolePermissions = count.rows[0].count;
         } else seeded.appRolePermissions = null;
+        const rowCounts: Record<string, number | null> = {};
+        for (const [label, relation] of [
+            ['organisations', 'public.organisations'], ['users', 'public.users'],
+            ['authUsers', 'auth.users'], ['memberships', 'public.memberships'],
+            ['tasks', 'public.tasks'], ['attendanceRecords', 'public.attendance_records']
+        ] as const) {
+            const exists = await client.query('SELECT to_regclass($1) IS NOT NULL AS present', [relation]);
+            if (!exists.rows[0].present) { rowCounts[label] = null; continue; }
+            const count = await client.query(`SELECT count(*)::int AS count FROM ${relation}`);
+            rowCounts[label] = count.rows[0].count;
+        }
         let historyCount: number | null = null;
         if (state.migration_history_table) {
             const history = await client.query('SELECT count(*)::int AS count FROM supabase_migrations.schema_migrations');
@@ -99,6 +110,7 @@ async function main() {
             requiredColumns: columns.rows,
             requiredFunctions: functions.rows.map((row: { proname: string }) => row.proname),
             seeded,
+            rowCounts,
             migrationHistoryCount: historyCount
         }, null, 2));
         await client.query('ROLLBACK');
