@@ -613,6 +613,14 @@ export function createServer(
         });
     });
 
+    app.get('/api/me/permissions', authenticate, requireContext, async (req: Request, res: Response) => {
+        const client = (req as any).dbClient as PoolClient;
+        const result = await client.query<{ permissions: string[] }>(
+            `SELECT public.fn_get_effective_permissions() AS permissions;`
+        );
+        return res.status(200).json({ permissions: result.rows[0]?.permissions ?? [] });
+    });
+
     // --- BACKSTAGE (PLATFORM) ROUTES ---
     app.get('/api/platform/organisations', authenticate, requireContext, async (req: Request, res: Response) => {
         const principal: VerifiedPrincipal = (req as any).principal;
@@ -623,8 +631,8 @@ export function createServer(
         if (!decision.allow) {
             return res.status(403).json({ error: decision.reasonCode, decision });
         }
-        const orgs = await client.query(`SELECT id, name, portal, tenant_type_key, status, member_min_aal FROM public.organisations ORDER BY name;`);
-        return res.status(200).json({ decision, data: orgs.rows });
+        const orgs = await client.query(`SELECT * FROM public.fn_platform_list_organisations();`);
+        return res.status(200).json({ decision, organisations: orgs.rows });
     });
 
     app.get('/api/platform/organisations/:id', authenticate, requireContext, async (req: Request, res: Response) => {
@@ -636,7 +644,7 @@ export function createServer(
         if (!decision.allow) {
             return res.status(403).json({ error: decision.reasonCode, decision });
         }
-        const org = await client.query(`SELECT id, name, portal, tenant_type_key, status, member_min_aal FROM public.organisations WHERE id = $1::uuid;`, [req.params.id]);
+        const org = await client.query(`SELECT * FROM public.fn_platform_get_organisation($1::uuid);`, [req.params.id]);
         if (org.rows.length === 0) {
             return res.status(404).json({ error: 'ORGANISATION_NOT_FOUND' });
         }
@@ -653,12 +661,25 @@ export function createServer(
         if (!decision.allow) {
             return res.status(403).json({ error: decision.reasonCode, decision });
         }
+        if (typeof body.name !== 'string' || !body.name.trim() || typeof body.adminEmail !== 'string' || !body.adminEmail.trim()) {
+            return res.status(400).json({ error: 'ORGANISATION_NAME_AND_ADMIN_EMAIL_REQUIRED' });
+        }
         try {
             const orgRes = await client.query<{ fn_platform_create_organisation: string }>(
                 `SELECT fn_platform_create_organisation($1, $2);`,
-                [body.name, body.tenantTypeKey]
+                [body.name.trim(), body.tenantTypeKey || 'studio_owner']
             );
-            return res.status(200).json({ success: true, organisationId: orgRes.rows[0]?.fn_platform_create_organisation });
+            const organisationId = orgRes.rows[0]?.fn_platform_create_organisation;
+            const rawToken = crypto.randomBytes(32).toString('base64url');
+            const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+            const inviteRes = await client.query<{ fn_platform_invite_tenant_admin_with_hash: string }>(
+                `SELECT fn_platform_invite_tenant_admin_with_hash($1::uuid, $2, $3, NULL);`,
+                [organisationId, body.adminEmail.trim(), tokenHash]
+            );
+            const invitationId = inviteRes.rows[0]?.fn_platform_invite_tenant_admin_with_hash;
+            await sendInvitationMail({ to: body.adminEmail.trim(), rawToken, invitationId, organisationName: body.name.trim() });
+            await client.query(`SELECT fn_mark_invitation_sent($1::uuid);`, [invitationId]);
+            return res.status(201).json({ success: true, organisationId, invitationId });
         } catch (err: any) {
             return res.status(400).json({ error: err.message });
         }
@@ -714,14 +735,11 @@ export function createServer(
             const rawToken = crypto.randomBytes(32).toString('base64url');
             const tokenHash = crypto.createHash('sha256').update(Buffer.from(rawToken, 'utf8')).digest('hex');
 
-            const invRes = await client.query<{ fn_platform_invite_tenant_admin: string }>(
-                `SELECT fn_platform_invite_tenant_admin($1::uuid, $2, $3::timestamptz);`,
-                [req.params.id, body.email, body.invitationExpiresAt || null]
+            const invRes = await client.query<{ fn_platform_invite_tenant_admin_with_hash: string }>(
+                `SELECT fn_platform_invite_tenant_admin_with_hash($1::uuid, $2, $3, $4::timestamptz);`,
+                [req.params.id, body.email, tokenHash, body.invitationExpiresAt || null]
             );
-            const invitationId = invRes.rows[0]?.fn_platform_invite_tenant_admin;
-
-            // Update token hash directly
-            await client.query(`UPDATE public.invitations SET token_hash = $1 WHERE id = $2::uuid;`, [tokenHash, invitationId]);
+            const invitationId = invRes.rows[0]?.fn_platform_invite_tenant_admin_with_hash;
 
             // Dispatch email
             await sendInvitationMail({
@@ -777,6 +795,16 @@ export function createServer(
         }
     });
 
+    app.get('/api/platform/support/grants', authenticate, requireContext, async (req: Request, res: Response) => {
+        const principal: VerifiedPrincipal = (req as any).principal;
+        const contextId: string = (req as any).contextId;
+        const client = (req as any).dbClient as PoolClient;
+        const decision = await decide(client, principal, contextId, 'platform.support.manage');
+        if (!decision.allow) return res.status(403).json({ error: decision.reasonCode, decision });
+        const grants = await client.query(`SELECT * FROM public.fn_list_platform_support_grants();`);
+        return res.status(200).json({ decision, grants: grants.rows });
+    });
+
     app.get('/api/platform/audit', authenticate, requireContext, async (req: Request, res: Response) => {
         const principal: VerifiedPrincipal = (req as any).principal;
         const contextId: string = (req as any).contextId;
@@ -786,7 +814,9 @@ export function createServer(
         if (!decision.allow) {
             return res.status(403).json({ error: decision.reasonCode, decision });
         }
-        const audit = await client.query(`SELECT * FROM public.audit_logs ORDER BY created_at DESC LIMIT 50;`);
+        const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100);
+        const offset = Math.max(Number(req.query.offset) || 0, 0);
+        const audit = await client.query(`SELECT * FROM public.fn_read_audit_logs($1::int, $2::int);`, [limit, offset]);
         return res.status(200).json({ decision, auditLogs: audit.rows });
     });
 

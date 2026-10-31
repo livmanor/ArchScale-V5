@@ -61,6 +61,7 @@ export const renewContext = (contextId: string) =>
 
 // ── Me ────────────────────────────────────────────────────────────────────────
 export const getMe = () => api('/api/me');
+export const getMyPermissions = () => api<{ permissions: string[] }>('/api/me/permissions');
 export const getMeSessions = () => api('/api/me/sessions');
 export const deleteMeSession = (id: string) => api(`/api/me/sessions/${id}`, 'DELETE');
 export const deleteAllMeSessions = () => api('/api/me/sessions', 'DELETE');
@@ -106,6 +107,7 @@ export const inviteOrgAdmin = (id: string, email: string) =>
 
 export const createSupportGrant = (payload: unknown) =>
   api('/api/platform/support/grants', 'POST', payload);
+export const getPlatformSupportGrants = () => api<{ grants: any[] }>('/api/platform/support/grants');
 export const revokeSupportGrant = (id: string) =>
   api(`/api/platform/support/grants/${id}/revoke`, 'POST');
 

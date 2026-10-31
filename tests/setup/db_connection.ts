@@ -110,7 +110,8 @@ export async function createIsolatedTestDatabase(testDbName: string): Promise<pg
         '013_context_rls_and_authz_functions.sql',
         '014_organisational_hierarchy_and_invitations.sql',
         '015_invitations_refinements_and_security_hardening.sql',
-        '016_tasks_attendance_modules.sql'
+        '016_tasks_attendance_modules.sql',
+        '017_platform_workflows.sql'
     ];
 
     for (const file of migrationFiles) {
