@@ -17,8 +17,7 @@ import { InvitationsPage } from './pages/frontstage/InvitationsPage';
 import { RolesPermissionsPage } from './pages/frontstage/RolesPermissionsPage';
 import { TenantsPage } from './pages/backstage/TenantsPage';
 
-// Roles with platform-level (backstage) access
-const BACKSTAGE_ROLES = new Set(['founder', 'platform_admin']);
+const BACKSTAGE_ROLES = new Set(['founder', 'platform_admin', 'client_servicing', 'developer', 'accounts']);
 
 export const App: React.FC = () => {
   const { toasts, removeToast } = useToast();
@@ -37,14 +36,8 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('xauth:unauthorized', handleUnauthorized);
   }, []);
 
-  // Authoritative RBAC derivation: in demo environment, demoPersona specifies role and dept
-  const personaRole = session?.demoPersona?.role
-    ?? context?.roleKey
-    ?? session?.principal.role;
-  const personaDept = context?.department
-    ?? session?.demoPersona?.dept
-    ?? (session?.principal as any)?.department
-    ?? '';
+  const personaRole = context?.roleKey ?? session?.principal.role;
+  const personaDept = context?.department ?? session?.principal.department ?? '';
 
   const isBackstage = !!(session && BACKSTAGE_ROLES.has(personaRole ?? ''));
   const isTenantAdmin = personaRole === 'business_owner' || personaRole === 'tenant_admin';
@@ -79,14 +72,8 @@ export const App: React.FC = () => {
     setSession(sess);
     setToken(sess.accessToken);
     setRefreshToken(sess.refreshToken ?? null);
-    const isBS = BACKSTAGE_ROLES.has(sess.principal.role ?? '')
-      || sess.demoPersona?.role === 'founder';
-    if (isBS) {
-      setActiveNav('tenants');
-    } else {
-      setPickingContext(true);
-      setActiveNav('tasks');
-    }
+    setPickingContext(true);
+    setActiveNav('tasks');
   };
 
   const handleContextCreated = (ctx: ContextData) => {
@@ -138,7 +125,7 @@ export const App: React.FC = () => {
   }
 
   // ── Org/workspace picker ───────────────────────────────────────────────────
-  if (pickingContext && !isBackstage) {
+  if (pickingContext) {
     return (
       <SessionContext.Provider value={{ session, context, setSession, setContext }}>
         <ToastList toasts={toasts} onRemove={removeToast} />
@@ -162,7 +149,7 @@ export const App: React.FC = () => {
             setActiveNav(key);
           }}
           title={isBackstage ? 'ArchScale Platform' : (context?.organisationName ?? 'ArchScale')}
-          subtitle={isBackstage ? 'Backstage' : (context?.jobRole ?? session?.demoPersona?.title ?? personaDept)}
+          subtitle={isBackstage ? 'Backstage' : (context?.jobRole ?? personaDept)}
           collapsed={sidebarCollapsed}
           onCollapse={() => setSidebarCollapsed(c => !c)}
         />

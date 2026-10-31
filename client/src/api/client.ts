@@ -4,7 +4,6 @@ import { XAuthClient, ApiResult } from '../../../sdk/src/index.js';
 // independent Tasks and Attendance apps without copying authentication logic.
 let _token: string | null = null;
 let _contextId: string | null = null;
-let _demoPersona: { role: string; dept: string; memberId: string; title: string } | null = null;
 const xauth = new XAuthClient({
   baseURL: import.meta.env.VITE_API_URL || '',
   onUnauthorized: () => window.dispatchEvent(new Event('xauth:unauthorized')),
@@ -13,8 +12,6 @@ const xauth = new XAuthClient({
 export function setToken(t: string | null): void { _token = t; xauth.setAccessToken(t); }
 export function setRefreshToken(t: string | null): void { xauth.setRefreshToken(t); }
 export function setContextId(c: string | null): void { _contextId = c; xauth.setContext(c); }
-// Display-only test persona metadata. It is never sent to the API or used for authorization.
-export function setDemoPersona(p: typeof _demoPersona): void { _demoPersona = p; }
 export function getToken(): string | null { return _token; }
 export function getContextId(): string | null { return _contextId; }
 
@@ -33,9 +30,6 @@ export const signIn = (email: string, password: string) =>
 
 export const signInByCode = (userCode: string, password: string) =>
   api('/api/session/sign-in', 'POST', { userCode, password });
-
-export const quickLogin = (key: string) =>
-  api('/api/demo/quick-login', 'POST', { key });
 
 export const verifyMfa = (code: string, overrideToken?: string) =>
   api('/api/session/mfa/verify', 'POST', { code }, overrideToken);

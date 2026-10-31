@@ -23,10 +23,9 @@ export const TopBar: React.FC<TopBarProps> = ({ session, context, onLogout, onSw
     return () => document.removeEventListener('mousedown', h);
   }, [menuOpen]);
 
-  const persona = session?.demoPersona;
-  const displayName = persona?.title || session?.principal.email || 'User';
-  const displayRole = persona?.role || session?.principal.role || 'member';
-  const displayDept = persona?.dept || (session?.principal as any)?.department || '';
+  const displayName = context?.jobRole || session?.principal.email || 'User';
+  const displayRole = context?.roleKey || session?.principal.role || 'member';
+  const displayDept = context?.department || session?.principal.department || '';
   const initial = displayName[0]?.toUpperCase() ?? '?';
 
   return (
