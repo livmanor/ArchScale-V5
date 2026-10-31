@@ -37,6 +37,8 @@ async function main() {
                 to_regclass('public.attendance_records') IS NOT NULL AS attendance_records,
                 to_regclass('public.app_catalogue') IS NOT NULL AS app_catalogue,
                 to_regclass('public.app_authorization_policies') IS NOT NULL AS app_authorization_policies,
+                to_regclass('public.permissions') IS NOT NULL AS permissions_table,
+                to_regclass('public.role_permissions') IS NOT NULL AS role_permissions_table,
                 to_regclass('supabase_migrations.schema_migrations') IS NOT NULL AS migration_history_table
         `);
         const state = result.rows[0];
@@ -65,18 +67,27 @@ async function main() {
             'fn_app_support_context_can_read', 'fn_app_member_label',
             'fn_revoke_user_access_contexts'
         ]]);
-           const seeded = await client.query(`
-              SELECT
-                (SELECT count(*)::int FROM public.roles) AS roles,
-                (SELECT count(*)::int FROM public.permissions) AS permissions,
-                CASE WHEN to_regclass('public.app_catalogue') IS NOT NULL
-                    THEN (SELECT count(*)::int FROM public.app_catalogue WHERE app_key IN ('tasks','attendance'))
-                    ELSE 0 END AS app_modules,
-                CASE WHEN to_regclass('public.app_authorization_policies') IS NOT NULL
-                    THEN (SELECT count(*)::int FROM public.app_authorization_policies)
-                    ELSE 0 END AS app_policies,
-                (SELECT count(*)::int FROM public.role_permissions WHERE permission_key LIKE 'tasks.%' OR permission_key LIKE 'attendance.%') AS app_role_permissions
-           `);
+        const seeded: Record<string, number | null> = {};
+        if (state.roles) {
+            const count = await client.query('SELECT count(*)::int AS count FROM public.roles');
+            seeded.roles = count.rows[0].count;
+        } else seeded.roles = null;
+        if (state.permissions_table) {
+            const count = await client.query('SELECT count(*)::int AS count FROM public.permissions');
+            seeded.permissions = count.rows[0].count;
+        } else seeded.permissions = null;
+        if (state.app_catalogue) {
+            const count = await client.query("SELECT count(*)::int AS count FROM public.app_catalogue WHERE app_key IN ('tasks','attendance')");
+            seeded.appModules = count.rows[0].count;
+        } else seeded.appModules = null;
+        if (state.app_authorization_policies) {
+            const count = await client.query('SELECT count(*)::int AS count FROM public.app_authorization_policies');
+            seeded.appPolicies = count.rows[0].count;
+        } else seeded.appPolicies = null;
+        if (state.role_permissions_table) {
+            const count = await client.query("SELECT count(*)::int AS count FROM public.role_permissions WHERE permission_key LIKE 'tasks.%' OR permission_key LIKE 'attendance.%'");
+            seeded.appRolePermissions = count.rows[0].count;
+        } else seeded.appRolePermissions = null;
         let historyCount: number | null = null;
         if (state.migration_history_table) {
             const history = await client.query('SELECT count(*)::int AS count FROM supabase_migrations.schema_migrations');
@@ -87,7 +98,7 @@ async function main() {
             schema: state,
             requiredColumns: columns.rows,
             requiredFunctions: functions.rows.map((row: { proname: string }) => row.proname),
-            seeded: seeded.rows[0],
+            seeded,
             migrationHistoryCount: historyCount
         }, null, 2));
         await client.query('ROLLBACK');
