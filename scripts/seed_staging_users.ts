@@ -133,16 +133,28 @@ async function main() {
         }
 
         console.log('[2/5] Creating TEST- fixture users via Supabase Admin API...');
-        const userDefs = [
+        const userDefs: Array<{
+            key: string;
+            email: string;
+            role: string | null;
+            orgId: string | null;
+            wsId: string | null;
+            enrolMfa: boolean;
+            expiry?: string;
+            department?: string;
+            jobRole?: string;
+            reportsToKey?: string;
+        }> = [
             { key: 'founder', email: `TEST-founder-${timestamp}@archscale.test`, role: 'founder', orgId: platformOrgId, wsId: platformWsId, enrolMfa: true },
             { key: 'client_servicing', email: `TEST-servicing-${timestamp}@archscale.test`, role: 'client_servicing', orgId: platformOrgId, wsId: platformWsId, enrolMfa: true },
-            { key: 'business_owner', email: `TEST-owner-${timestamp}@archscale.test`, role: 'business_owner', orgId: studioOrgId, wsId: studioWsId, enrolMfa: true },
-            { key: 'leader', email: `TEST-leader-${timestamp}@archscale.test`, role: 'leader', orgId: studioOrgId, wsId: studioWsId, enrolMfa: false },
-            { key: 'intern', email: `TEST-intern-${timestamp}@archscale.test`, role: 'intern', orgId: projOrgId, wsId: projWsId, enrolMfa: false, expiry: '30 days' },
+            { key: 'business_owner', email: `TEST-owner-${timestamp}@archscale.test`, role: 'business_owner', orgId: studioOrgId, wsId: studioWsId, enrolMfa: true, department: 'Management', jobRole: 'Tenant Admin' },
+            { key: 'leader', email: `TEST-leader-${timestamp}@archscale.test`, role: 'leader', orgId: studioOrgId, wsId: studioWsId, enrolMfa: false, department: 'Design', jobRole: 'Design Manager' },
+            { key: 'intern', email: `TEST-intern-${timestamp}@archscale.test`, role: 'intern', orgId: studioOrgId, wsId: studioWsId, enrolMfa: false, expiry: '30 days', department: 'Design', jobRole: 'Junior Designer', reportsToKey: 'leader' },
             { key: 'no_membership', email: `TEST-nomem-${timestamp}@archscale.test`, role: null, orgId: null, wsId: null, enrolMfa: false },
             { key: 'multi_membership', email: `TEST-multi-${timestamp}@archscale.test`, role: 'multi', orgId: studioOrgId, wsId: studioWsId, enrolMfa: true }
         ];
 
+        const membershipIds: Record<string, string> = {};
         for (const def of userDefs) {
             const password = generateStrongPassword();
             const createRes = await adminClient.auth.admin.createUser({
@@ -165,21 +177,31 @@ async function main() {
             // Setup memberships
             if (def.role === 'multi') {
                 // Owner in Studio Org
-                await pgAdmin.query(`
+                const ownerMembership = await pgAdmin.query(`
                     INSERT INTO public.memberships (organisation_id, user_id, role_key, status)
-                    VALUES ($1, $2, 'business_owner', 'ACTIVE');
+                    VALUES ($1, $2, 'business_owner', 'ACTIVE') RETURNING id;
                 `, [studioOrgId, user.id]);
+                membershipIds[`${def.key}:business_owner`] = ownerMembership.rows[0].id;
                 // Intern in Project Org (requires expires_at)
-                await pgAdmin.query(`
+                const internMembership = await pgAdmin.query(`
                     INSERT INTO public.memberships (organisation_id, user_id, role_key, status, expires_at)
-                    VALUES ($1, $2, 'intern', 'ACTIVE', now() + INTERVAL '30 days');
+                    VALUES ($1, $2, 'intern', 'ACTIVE', now() + INTERVAL '30 days') RETURNING id;
                 `, [projOrgId, user.id]);
+                membershipIds[`${def.key}:intern`] = internMembership.rows[0].id;
             } else if (def.role) {
                 const expiresInterval = def.expiry ? `now() + INTERVAL '${def.expiry}'` : 'NULL';
-                await pgAdmin.query(`
-                    INSERT INTO public.memberships (organisation_id, user_id, role_key, status, expires_at)
-                    VALUES ($1, $2, $3, 'ACTIVE', ${expiresInterval});
-                `, [def.orgId, user.id, def.role]);
+                const managerMembershipId = def.reportsToKey ? membershipIds[def.reportsToKey] : null;
+                if (def.reportsToKey && !managerMembershipId) {
+                    throw new Error(`Reporting manager fixture ${def.reportsToKey} must be created before ${def.key}.`);
+                }
+                const membership = await pgAdmin.query(`
+                    INSERT INTO public.memberships (
+                        organisation_id, user_id, role_key, status, expires_at,
+                        department, job_role, reporting_manager_membership_id
+                    ) VALUES ($1, $2, $3, 'ACTIVE', ${expiresInterval}, $4, $5, $6::uuid)
+                    RETURNING id;
+                `, [def.orgId, user.id, def.role, def.department ?? null, def.jobRole ?? null, managerMembershipId]);
+                membershipIds[def.key] = membership.rows[0].id;
             }
 
             // Enrol TOTP MFA if required

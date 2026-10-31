@@ -23,17 +23,25 @@ async function main() {
         for (const [key, user] of Object.entries(fixtureUsers)) {
             const result = await client.query(`
                 SELECT EXISTS (SELECT 1 FROM auth.users WHERE lower(email) = lower($1)) AS exists_in_auth,
-                       COALESCE(array_agg(DISTINCT m.role_key) FILTER (WHERE m.status = 'ACTIVE' AND o.status = 'ACTIVE'), ARRAY[]::text[]) AS active_roles
+                       COALESCE(json_agg(json_build_object(
+                           'role', m.role_key,
+                           'organisation', o.name,
+                           'department', m.department,
+                           'jobRole', m.job_role,
+                           'reportsToRole', manager.role_key,
+                           'reportsToDepartment', manager.department
+                       )) FILTER (WHERE m.status = 'ACTIVE' AND o.status = 'ACTIVE'), '[]'::json) AS active_memberships
                   FROM public.users u
                   LEFT JOIN public.memberships m ON m.user_id = u.id
                   LEFT JOIN public.organisations o ON o.id = m.organisation_id
+                  LEFT JOIN public.memberships manager ON manager.id = m.reporting_manager_membership_id
                  WHERE lower(u.email) = lower($1)
             `, [user.email]);
             results.push({
                 key,
                 email: user.email,
                 existsInAuth: result.rows[0].exists_in_auth,
-                activeRoles: result.rows[0].active_roles,
+                activeMemberships: result.rows[0].active_memberships,
                 mfaEnrolled: Boolean(user.totpSecret)
             });
         }
