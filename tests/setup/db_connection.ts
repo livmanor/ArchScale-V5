@@ -111,7 +111,8 @@ export async function createIsolatedTestDatabase(testDbName: string): Promise<pg
         '014_organisational_hierarchy_and_invitations.sql',
         '015_invitations_refinements_and_security_hardening.sql',
         '016_tasks_attendance_modules.sql',
-        '017_platform_workflows.sql'
+        '017_platform_workflows.sql',
+        '018_recovery_context_revocation.sql'
     ];
 
     for (const file of migrationFiles) {

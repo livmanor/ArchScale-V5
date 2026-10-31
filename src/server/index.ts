@@ -178,18 +178,27 @@ export function createServer(
 
     // 1c. POST /api/session/reset-password (B0.6: Revoke every session and context of that user)
     app.post('/api/session/reset-password', async (req: Request, res: Response) => {
-        const { token, newPassword } = req.body || {};
-        if (!token || !newPassword || typeof token !== 'string' || typeof newPassword !== 'string' || newPassword.length < 12) {
+        const { token, email, newPassword } = req.body || {};
+        const localTest = process.env.NODE_ENV === 'test' && process.env.ALLOW_LOCAL_AUTH === 'true';
+        const resetCredential = typeof token === 'string' && token ? token : (localTest && typeof email === 'string' ? email : null);
+        if (!resetCredential || typeof newPassword !== 'string' || newPassword.length < 12) {
             return res.status(400).json({ error: 'TOKEN_AND_VALID_PASSWORD_REQUIRED' });
         }
         try {
             const idp: IdentityProvider = identityProvider || getIdentityProvider();
-            if (idp.confirmPasswordReset) {
-                await idp.confirmPasswordReset(token, newPassword);
+            if (!idp.confirmPasswordReset) {
+                return res.status(501).json({ error: 'PASSWORD_RESET_UNSUPPORTED' });
             }
-
-            // confirmPasswordReset asks Supabase Auth to sign out globally;
-            // all requests also revalidate the Auth token before using context.
+            const reset = await idp.confirmPasswordReset(resetCredential, newPassword);
+            let userId = reset && typeof reset === 'object' && 'userId' in reset ? reset.userId : undefined;
+            if (!userId && localTest && typeof email === 'string') {
+                const user = await dbPool.query<{ id: string }>(
+                    `SELECT id FROM public.users WHERE lower(email) = lower($1) LIMIT 1;`, [email]
+                );
+                userId = user.rows[0]?.id;
+            }
+            if (!userId) throw new Error('Verified reset did not resolve an account');
+            await dbPool.query(`SELECT public.fn_revoke_user_access_contexts($1::uuid);`, [userId]);
             return res.status(200).json({ success: true, message: 'Password has been reset and all sessions revoked' });
         } catch (err: any) {
             return res.status(400).json({ error: err.code || 'RESET_FAILED', message: err.message });
