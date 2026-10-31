@@ -41,6 +41,51 @@ CREATE TABLE IF NOT EXISTS public.tasks (
     CONSTRAINT tasks_assignees_same_org CHECK (assigned_to_membership_id <> created_by_membership_id OR organisation_id IS NOT NULL)
 );
 
+-- Upgrade the existing ArchScale task table in place when it uses tenant_id/task_title/due_date.
+ALTER TABLE public.tasks
+    ADD COLUMN IF NOT EXISTS organisation_id UUID REFERENCES public.organisations(id) ON DELETE RESTRICT,
+    ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES public.workspaces(id) ON DELETE RESTRICT,
+    ADD COLUMN IF NOT EXISTS title TEXT,
+    ADD COLUMN IF NOT EXISTS reviewer_membership_id UUID REFERENCES public.memberships(id) ON DELETE RESTRICT,
+    ADD COLUMN IF NOT EXISTS due_at TIMESTAMPTZ;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='tasks' AND column_name='tenant_id') THEN
+        EXECUTE 'UPDATE public.tasks SET organisation_id = tenant_id WHERE organisation_id IS NULL';
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='tasks' AND column_name='task_title') THEN
+        EXECUTE 'UPDATE public.tasks SET title = task_title WHERE title IS NULL';
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='tasks' AND column_name='due_date') THEN
+        EXECUTE 'UPDATE public.tasks SET due_at = due_date WHERE due_at IS NULL';
+    END IF;
+END $$;
+
+UPDATE public.tasks t
+   SET workspace_id = w.id
+  FROM LATERAL (
+      SELECT id FROM public.workspaces
+       WHERE organisation_id = t.organisation_id AND is_active
+       ORDER BY is_default DESC, created_at, id
+       LIMIT 1
+  ) w
+ WHERE t.workspace_id IS NULL;
+
+UPDATE public.tasks
+   SET title = COALESCE(title, 'Existing task ' || work_id),
+       description = COALESCE(description, ''),
+       reviewer_membership_id = COALESCE(reviewer_membership_id, reporting_manager_membership_id, created_by_membership_id),
+       start_date = COALESCE(start_date, created_at::date),
+       approval_status = COALESCE(approval_status, 'Not Required'),
+       updated_at = COALESCE(updated_at, created_at, now());
+
+ALTER TABLE public.tasks
+    ALTER COLUMN organisation_id SET NOT NULL,
+    ALTER COLUMN workspace_id SET NOT NULL,
+    ALTER COLUMN title SET NOT NULL,
+    ALTER COLUMN reviewer_membership_id SET NOT NULL;
+
 CREATE INDEX IF NOT EXISTS tasks_org_workspace ON public.tasks(organisation_id, workspace_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS tasks_assignment ON public.tasks(assigned_to_membership_id, status);
 CREATE INDEX IF NOT EXISTS tasks_creator ON public.tasks(created_by_membership_id);
@@ -64,6 +109,56 @@ CREATE TABLE IF NOT EXISTS public.attendance_records (
     UNIQUE (organisation_id, membership_id, attendance_date)
 );
 
+-- Upgrade the existing tenant_id/date/check_in_time attendance representation in place.
+ALTER TABLE public.attendance_records
+    ADD COLUMN IF NOT EXISTS attendance_id TEXT,
+    ADD COLUMN IF NOT EXISTS organisation_id UUID REFERENCES public.organisations(id) ON DELETE RESTRICT,
+    ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES public.workspaces(id) ON DELETE RESTRICT,
+    ADD COLUMN IF NOT EXISTS attendance_date DATE,
+    ADD COLUMN IF NOT EXISTS check_in TIME,
+    ADD COLUMN IF NOT EXISTS check_out TIME;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='attendance_records' AND column_name='tenant_id') THEN
+        EXECUTE 'UPDATE public.attendance_records SET organisation_id = tenant_id WHERE organisation_id IS NULL';
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='attendance_records' AND column_name='date') THEN
+        EXECUTE 'UPDATE public.attendance_records SET attendance_date = date WHERE attendance_date IS NULL';
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='attendance_records' AND column_name='check_in_time') THEN
+        EXECUTE 'UPDATE public.attendance_records SET check_in = check_in_time WHERE check_in IS NULL';
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='attendance_records' AND column_name='check_out_time') THEN
+        EXECUTE 'UPDATE public.attendance_records SET check_out = check_out_time WHERE check_out IS NULL';
+    END IF;
+END $$;
+
+UPDATE public.attendance_records a
+   SET workspace_id = w.id
+  FROM LATERAL (
+      SELECT id FROM public.workspaces
+       WHERE organisation_id = a.organisation_id AND is_active
+       ORDER BY is_default DESC, created_at, id
+       LIMIT 1
+  ) w
+ WHERE a.workspace_id IS NULL;
+
+UPDATE public.attendance_records
+   SET attendance_id = COALESCE(attendance_id, 'ATT-' || upper(replace(id::text, '-', ''))),
+       attendance_date = COALESCE(attendance_date, created_at::date),
+       last_updated_by_membership_id = COALESCE(last_updated_by_membership_id, created_by_membership_id),
+       remarks = COALESCE(remarks, ''),
+       updated_at = COALESCE(updated_at, created_at, now());
+
+ALTER TABLE public.attendance_records
+    ALTER COLUMN attendance_id SET NOT NULL,
+    ALTER COLUMN organisation_id SET NOT NULL,
+    ALTER COLUMN workspace_id SET NOT NULL,
+    ALTER COLUMN attendance_date SET NOT NULL,
+    ALTER COLUMN last_updated_by_membership_id SET NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS attendance_records_attendance_id_key ON public.attendance_records(attendance_id);
+
 CREATE INDEX IF NOT EXISTS attendance_org_date ON public.attendance_records(organisation_id, attendance_date DESC);
 CREATE INDEX IF NOT EXISTS attendance_member_date ON public.attendance_records(membership_id, attendance_date DESC);
 
@@ -75,6 +170,33 @@ CREATE TABLE IF NOT EXISTS public.attendance_comments (
     body TEXT NOT NULL CHECK (length(btrim(body)) BETWEEN 1 AND 4000),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE public.attendance_comments
+    ADD COLUMN IF NOT EXISTS attendance_record_id UUID REFERENCES public.attendance_records(id) ON DELETE RESTRICT,
+    ADD COLUMN IF NOT EXISTS organisation_id UUID REFERENCES public.organisations(id) ON DELETE RESTRICT,
+    ADD COLUMN IF NOT EXISTS body TEXT;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='attendance_comments' AND column_name='attendance_id') THEN
+        EXECUTE 'UPDATE public.attendance_comments SET attendance_record_id = attendance_id WHERE attendance_record_id IS NULL';
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='attendance_comments' AND column_name='tenant_id') THEN
+        EXECUTE 'UPDATE public.attendance_comments SET organisation_id = tenant_id WHERE organisation_id IS NULL';
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='attendance_comments' AND column_name='comment') THEN
+        EXECUTE 'UPDATE public.attendance_comments SET body = comment WHERE body IS NULL';
+    END IF;
+END $$;
+
+UPDATE public.attendance_comments c
+   SET organisation_id = r.organisation_id
+  FROM public.attendance_records r
+ WHERE r.id = c.attendance_record_id AND c.organisation_id IS NULL;
+ALTER TABLE public.attendance_comments
+    ALTER COLUMN attendance_record_id SET NOT NULL,
+    ALTER COLUMN organisation_id SET NOT NULL,
+    ALTER COLUMN body SET NOT NULL;
 CREATE INDEX IF NOT EXISTS attendance_comments_record ON public.attendance_comments(attendance_record_id, created_at);
 
 CREATE TABLE IF NOT EXISTS public.app_record_audit (
