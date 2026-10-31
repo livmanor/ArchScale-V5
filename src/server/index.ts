@@ -75,7 +75,7 @@ export function createServer(
         return res.status(404).send('Not Found');
     });
 
-    app.get(['/recover', '/forgot-password', '/accept'], (_req: Request, res: Response) => {
+    app.get(['/recover', '/forgot-password', '/accept', '/auth/callback'], (_req: Request, res: Response) => {
         const filePath = path.join(__dirname, 'public', 'index.html');
         if (!fs.existsSync(filePath)) return res.status(404).send('Not Found');
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -356,6 +356,22 @@ export function createServer(
             return res.status(200).json({ accessToken:session.accessToken,refreshToken:session.refreshToken,principal:session.principal });
         } catch {
             return res.status(401).json({ error:'AUTH_REFRESH_FAILED' });
+        }
+    });
+
+    app.post('/api/session/oauth/complete', authenticate, async (req: Request, res: Response) => {
+        const principal: VerifiedPrincipal = (req as any).principal;
+        const idp: IdentityProvider = (req as any).idp;
+        try {
+            await dbPool.query(
+                `SELECT * FROM public.fn_upsert_user_mirror($1::uuid, $2::text, NULL);`,
+                [principal.id, principal.email.toLowerCase()]
+            );
+            const mfaStatus = await idp.getMfaStatus(principal.id);
+            const mfaRequired = mfaStatus.factors.some(factor => factor.status === 'verified') && principal.aal !== 'aal2';
+            return res.status(200).json({ principal, mfaRequired });
+        } catch {
+            return res.status(401).json({ error: 'AUTH_OAUTH_SESSION_REJECTED' });
         }
     });
 

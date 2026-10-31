@@ -43,6 +43,11 @@ export const SERVER_ROUTES: Record<string, ServerRouteDef> = {
         method: 'POST',
         kind: 'session'
     },
+    'session.oauth.complete': {
+        path: '/api/session/oauth/complete',
+        method: 'POST',
+        kind: 'session'
+    },
     'session.memberships': {
         path: '/api/session/memberships',
         method: 'GET',

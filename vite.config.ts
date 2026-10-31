@@ -5,6 +5,8 @@ import path from 'path';
 export default defineConfig({
   plugins: [react()],
   root: 'client',
+  envDir: '..',
+  envPrefix: ['VITE_', 'SUPABASE_URL', 'SUPABASE_ANON_KEY'],
   build: {
     outDir: '../src/server/public',
     emptyOutDir: true,

@@ -31,6 +31,9 @@ export const signIn = (email: string, password: string) =>
 export const signInByCode = (userCode: string, password: string) =>
   api('/api/session/sign-in', 'POST', { userCode, password });
 
+export const completeOAuthSession = (accessToken: string) =>
+  api<{ principal: any; mfaRequired: boolean }>('/api/session/oauth/complete', 'POST', {}, accessToken);
+
 export const verifyMfa = (code: string, overrideToken?: string) =>
   api('/api/session/mfa/verify', 'POST', { code }, overrideToken);
 
