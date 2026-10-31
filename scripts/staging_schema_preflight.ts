@@ -35,6 +35,7 @@ async function main() {
                 to_regclass('public.audit_logs') IS NOT NULL AS audit_logs,
                 to_regclass('public.tasks') IS NOT NULL AS tasks,
                 to_regclass('public.attendance_records') IS NOT NULL AS attendance_records,
+                to_regclass('public.app_record_audit') IS NOT NULL AS app_record_audit,
                 to_regclass('public.app_catalogue') IS NOT NULL AS app_catalogue,
                 to_regclass('public.app_authorization_policies') IS NOT NULL AS app_authorization_policies,
                 to_regclass('public.permissions') IS NOT NULL AS permissions_table,
@@ -91,12 +92,22 @@ async function main() {
                                 (SELECT count(*)::int FROM public.attendance_records a WHERE NOT EXISTS (SELECT 1 FROM public.workspaces w WHERE w.organisation_id=a.tenant_id AND w.is_active)) AS attendance_without_active_workspace
                     `);
                     const appPolicies = await client.query(`
-                            SELECT tablename, policyname, cmd, permissive, roles
+                        SELECT tablename, policyname, cmd, permissive, roles, qual, with_check
                                 FROM pg_policies
                              WHERE schemaname = 'public'
                                  AND tablename IN ('tasks','attendance_records','attendance_comments')
                              ORDER BY tablename, policyname
                     `);
+                        const privileges = await client.query(`
+                            SELECT table_name,
+                                has_table_privilege('archscale_app_runtime', 'public.' || table_name, 'SELECT') AS runtime_select,
+                                has_table_privilege('archscale_app_runtime', 'public.' || table_name, 'INSERT') AS runtime_insert,
+                                has_table_privilege('archscale_app_runtime', 'public.' || table_name, 'UPDATE') AS runtime_update,
+                                has_table_privilege('archscale_app_runtime', 'public.' || table_name, 'DELETE') AS runtime_delete,
+                                has_table_privilege('anon', 'public.' || table_name, 'SELECT') AS anon_select,
+                                has_table_privilege('authenticated', 'public.' || table_name, 'SELECT') AS authenticated_select
+                            FROM unnest(ARRAY['tasks','attendance_records','attendance_comments']::text[]) AS table_name
+                        `);
         const functions = await client.query(`
             SELECT proname FROM pg_proc p
             JOIN pg_namespace n ON n.oid = p.pronamespace
@@ -154,6 +165,7 @@ async function main() {
             appConstraints: constraints.rows,
             appDataShape: dataShape.rows[0],
             existingAppPolicies: appPolicies.rows,
+            appTablePrivileges: privileges.rows,
             requiredFunctions: functions.rows.map((row: { proname: string }) => row.proname),
             seeded,
             rowCounts,
