@@ -74,10 +74,9 @@ export const TenantsPage: React.FC = () => {
   const columns: Column<any>[] = [
     { key: 'name', label: 'Name', sortable: true, width: 200 },
     { key: 'status', label: 'Status', width: 100, render: row => <Badge variant={statusVariant(row.status)}>{row.status}</Badge> },
-    { key: 'tier', label: 'Tier', width: 80 },
-    { key: 'adminEmail', label: 'Admin Email', width: 220 },
-    { key: 'createdAt', label: 'Created', width: 130, sortable: true, render: row =>
-        row.createdAt ? new Date(row.createdAt).toLocaleDateString() : '—'
+    { key: 'tenant_type_key', label: 'Tenant Type', width: 150 },
+    { key: 'created_at', label: 'Created', width: 150, sortable: true, render: row =>
+      row.created_at ? new Date(row.created_at).toLocaleDateString() : '—'
     },
   ];
 
@@ -96,7 +95,7 @@ export const TenantsPage: React.FC = () => {
         loading={loading}
         error={error ?? undefined}
         onRetry={load}
-        searchKeys={['name', 'adminEmail', 'status']}
+        searchKeys={['name', 'tenant_type_key', 'status']}
         emptyTitle="No organisations"
         emptySubtitle="Register the first tenant to get started"
         rowActions={row => (
