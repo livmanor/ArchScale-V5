@@ -26,7 +26,7 @@ const TEST_RUN_PASSWORD = crypto.randomBytes(24).toString('base64url') + 'Aa1!';
 const TEST_EMAIL = `TEST-staging-${Date.now()}@archscale.test`;
 const TEST_USER_CODE = `AS-TEST-${Date.now().toString().slice(-6)}`;
 
-describe('SupabaseProvider Staging Integration Suite (Real Supabase Auth)', () => {
+describe.runIf(config.env === 'staging' && process.env.ARCHSCALE_STAGING_TESTS === 'true')('SupabaseProvider Staging Integration Suite (Real Supabase Auth)', () => {
     let provider: SupabaseProvider;
     let adminSupabase: SupabaseClient;
     let adminDbClient: pg.Client;
