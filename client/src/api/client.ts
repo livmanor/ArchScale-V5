@@ -53,8 +53,8 @@ export const getMemberships = () =>
 export const getWorkspaces = (organisationId: string) =>
   api<{ workspaces: any[] }>(`/api/session/workspaces?organisationId=${encodeURIComponent(organisationId)}`);
 
-export const createContext = (organisationId: string, workspaceId: string) =>
-  api('/api/session/context', 'POST', { organisationId, workspaceId });
+export const createContext = (organisationId: string, workspaceId: string, supportGrantId?: string) =>
+  api('/api/session/context', 'POST', { organisationId, workspaceId, supportGrantId });
 
 export const renewContext = (contextId: string) =>
   api('/api/session/context/renew', 'POST', { contextId });

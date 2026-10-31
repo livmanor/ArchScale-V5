@@ -99,7 +99,7 @@ export const App: React.FC = () => {
         case 'tenants': return <TenantsPage />;
         case 'roles':   return <RolesPermissionsPage />;
         case 'audit':   return <AuditLogPage />;
-        case 'support': return <SupportAccessPage />;
+        case 'support': return <SupportAccessPage onContextCreated={handleContextCreated} />;
         default:        return <TenantsPage />;
       }
     }

@@ -180,3 +180,64 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION public.fn_platform_get_organisation(UUID) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.fn_platform_get_organisation(UUID) TO archscale_app_runtime;
+
+CREATE OR REPLACE FUNCTION public.fn_app_support_context_can_read(p_organisation_id UUID)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_context_id UUID;
+    v_grant_id UUID;
+    v_membership_id UUID;
+    v_organisation_id UUID;
+BEGIN
+    v_context_id := fn_current_context_id();
+    IF v_context_id IS NULL OR NOT is_context_valid(v_context_id) THEN RETURN FALSE; END IF;
+
+    SELECT ac.support_grant_id, ac.membership_id, ac.organisation_id
+      INTO v_grant_id, v_membership_id, v_organisation_id
+      FROM public.access_contexts ac WHERE ac.id = v_context_id;
+    IF v_grant_id IS NULL OR v_organisation_id <> p_organisation_id THEN RETURN FALSE; END IF;
+
+    RETURN EXISTS (
+        SELECT 1
+          FROM public.support_access_grants sag
+          JOIN public.role_permissions rp ON rp.role_key = (
+              SELECT m.role_key FROM public.memberships m WHERE m.id = v_membership_id
+          )
+         WHERE sag.id = v_grant_id
+           AND sag.staff_membership_id = v_membership_id
+           AND sag.target_organisation_id = p_organisation_id
+           AND sag.revoked_at IS NULL
+           AND sag.expires_at > now()
+           AND rp.permission_key = 'platform.support.read'
+    );
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.fn_app_support_context_can_read(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.fn_app_support_context_can_read(UUID) TO archscale_app_runtime;
+
+DROP POLICY IF EXISTS tasks_select_policy ON public.tasks;
+CREATE POLICY tasks_select_policy ON public.tasks FOR SELECT TO archscale_app_runtime
+USING (
+    public.fn_app_record_allowed('tasks','read',organisation_id,department,created_by_membership_id,assigned_to_membership_id)
+    OR public.fn_app_support_context_can_read(organisation_id)
+);
+
+DROP POLICY IF EXISTS attendance_select_policy ON public.attendance_records;
+CREATE POLICY attendance_select_policy ON public.attendance_records FOR SELECT TO archscale_app_runtime
+USING (
+    public.fn_app_record_allowed('attendance','read',organisation_id,department,membership_id,membership_id)
+    OR public.fn_app_support_context_can_read(organisation_id)
+);
+
+DROP POLICY IF EXISTS attendance_comment_select_policy ON public.attendance_comments;
+CREATE POLICY attendance_comment_select_policy ON public.attendance_comments FOR SELECT TO archscale_app_runtime
+USING (
+    public.fn_app_record_allowed('attendance','read',organisation_id,NULL,NULL,NULL)
+    OR public.fn_app_support_context_can_read(organisation_id)
+);

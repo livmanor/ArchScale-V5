@@ -30,6 +30,7 @@ export interface ContextData {
   department?: string;
   jobRole?: string;
   portal?: 'platform' | 'subscriber';
+  supportGrantId?: string | null;
 }
 
 export interface SessionCtx {
