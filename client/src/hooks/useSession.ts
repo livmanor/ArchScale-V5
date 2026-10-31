@@ -29,6 +29,7 @@ export interface ContextData {
   membershipId?: string;
   department?: string;
   jobRole?: string;
+  portal?: 'platform' | 'subscriber';
 }
 
 export interface SessionCtx {

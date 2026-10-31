@@ -447,7 +447,7 @@ export function createServer(
             try {
                 await client.query('BEGIN');
                 await client.query('SELECT fn_set_app_context($1::uuid,$2::uuid,$3::text)', [context.contextId,principal.id,principal.sessionId]);
-                const details = await client.query(`SELECT m.id AS membership_id,m.role_key,m.department,m.job_role,o.name AS organisation_name,w.name AS workspace_name
+                const details = await client.query(`SELECT m.id AS membership_id,m.role_key,m.department,m.job_role,o.name AS organisation_name,o.portal,w.name AS workspace_name
                     FROM public.access_contexts ac JOIN public.memberships m ON m.id=ac.membership_id
                     JOIN public.organisations o ON o.id=ac.organisation_id JOIN public.workspaces w ON w.id=ac.workspace_id
                     WHERE ac.id=$1::uuid`, [context.contextId]);
