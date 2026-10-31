@@ -25,9 +25,10 @@ export const AttendancePage: React.FC = () => {
   // RBAC checks
   const activeRole = context?.roleKey;
   const activeDept = context?.department;
+  const isSupportReadOnly = !!context?.supportGrantId;
   const isHRManager = activeDept === 'HR' && activeRole === 'manager_coordinator';
   const isJuniorHR = activeDept === 'HR' && activeRole === 'intern';
-  const isAuthorized = isHRManager || isJuniorHR;
+  const isAuthorized = isHRManager || isJuniorHR || isSupportReadOnly;
 
   // Detail drawer
   const [selected, setSelected] = useState<any | null>(null);
@@ -230,22 +231,26 @@ export const AttendancePage: React.FC = () => {
                 </div>
               )}
 
-              <FormField label="Append HR Comment">
-                <TextareaInput
-                  placeholder="Add an authenticated comment or compliance note…"
-                  value={comment}
-                  onChange={e => setComment(e.target.value)}
-                  style={{ minHeight: 64 }}
-                />
-              </FormField>
-              <Button
-                variant="secondary"
-                onClick={handleComment}
-                loading={commenting}
-                disabled={!comment.trim()}
-              >
-                Post Comment
-              </Button>
+              {!isSupportReadOnly && (
+                <>
+                  <FormField label="Append HR Comment">
+                    <TextareaInput
+                      placeholder="Add an authenticated comment or compliance note…"
+                      value={comment}
+                      onChange={e => setComment(e.target.value)}
+                      style={{ minHeight: 64 }}
+                    />
+                  </FormField>
+                  <Button
+                    variant="secondary"
+                    onClick={handleComment}
+                    loading={commenting}
+                    disabled={!comment.trim()}
+                  >
+                    Post Comment
+                  </Button>
+                </>
+              )}
             </div>
           </>
         )}

@@ -44,7 +44,7 @@ export const App: React.FC = () => {
   const isManager = personaRole === 'leader' || personaRole === 'manager_coordinator';
 
   // Section 11: Attendance is strictly hidden from Tenant Admin, Design, Accounts
-  const showAttendance = isBackstage || isHR;
+  const showAttendance = isBackstage || isHR || !!context?.supportGrantId;
   // Section 06: Invitations can only be managed by Tenant Admin
   const showInvitations = isTenantAdmin;
   // Section 13: Roles & Permissions preview visible to Tenant Admin and Managers

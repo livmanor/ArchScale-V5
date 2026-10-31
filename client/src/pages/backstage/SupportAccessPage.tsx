@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { createSupportGrant, getPlatformOrgs, getPlatformSupportGrants, revokeSupportGrant } from '../../api/client';
+import { createContext, createSupportGrant, getPlatformOrgs, getPlatformSupportGrants, getWorkspaces, revokeSupportGrant, setContextId } from '../../api/client';
 import { Badge, statusVariant } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import { DataTable, Column } from '../../components/DataTable';
@@ -7,11 +7,17 @@ import { FormField, SelectInput, TextInput, TextareaInput } from '../../componen
 import { PageHeader } from '../../components/PageHeader';
 import { useToast } from '../../hooks/useToast';
 import { ToastList } from '../../components/Toast';
+import type { ContextData } from '../../hooks/useSession';
 
 interface Organisation { id: string; name: string; portal: string }
-interface Grant { id: string; target_organisation_name: string; reason: string; grant_status: string; expires_at: string }
+interface Grant { id: string; target_organisation_id: string; target_organisation_name: string; reason: string; grant_status: string; expires_at: string }
+interface Workspace { workspaceId: string; workspaceName: string }
 
-export const SupportAccessPage: React.FC = () => {
+interface SupportAccessPageProps {
+  onContextCreated: (context: ContextData) => void;
+}
+
+export const SupportAccessPage: React.FC<SupportAccessPageProps> = ({ onContextCreated }) => {
   const { toasts, addToast, removeToast } = useToast();
   const [organisations, setOrganisations] = useState<Organisation[]>([]);
   const [grants, setGrants] = useState<Grant[]>([]);
@@ -21,6 +27,10 @@ export const SupportAccessPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedGrant, setSelectedGrant] = useState<Grant | null>(null);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [workspaceId, setWorkspaceId] = useState('');
+  const [entering, setEntering] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,6 +61,41 @@ export const SupportAccessPage: React.FC = () => {
     if (!result.ok) { addToast('error', result.message); return; }
     addToast('success', 'Support grant revoked');
     load();
+  };
+
+  const handleSelectGrant = async (grant: Grant) => {
+    setSelectedGrant(grant);
+    setWorkspaceId('');
+    setWorkspaces([]);
+    const result = await getWorkspaces(grant.target_organisation_id);
+    if (!result.ok) { addToast('error', result.message); return; }
+    setWorkspaces(result.data.workspaces ?? []);
+  };
+
+  const handleEnter = async () => {
+    if (!selectedGrant || !workspaceId) return;
+    setEntering(true);
+    const result = await createContext(selectedGrant.target_organisation_id, workspaceId, selectedGrant.id);
+    setEntering(false);
+    if (!result.ok) { addToast('error', result.message); return; }
+    const data = (result.data as any).context;
+    const context: ContextData = {
+      contextId: data.contextId,
+      organisationId: selectedGrant.target_organisation_id,
+      organisationName: data.organisation_name ?? selectedGrant.target_organisation_name,
+      workspaceId,
+      workspaceName: data.workspace_name,
+      membershipId: data.membership_id,
+      roleKey: data.role_key,
+      department: data.department,
+      jobRole: data.job_role,
+      portal: data.portal,
+      supportGrantId: data.support_grant_id,
+      aal: data.aal ?? 'aal2',
+      expiresAt: data.expiresAt,
+    };
+    setContextId(context.contextId);
+    onContextCreated(context);
   };
 
   const columns: Column<Grant>[] = [
@@ -88,8 +133,24 @@ export const SupportAccessPage: React.FC = () => {
         searchKeys={['target_organisation_name', 'reason', 'grant_status']}
         emptyTitle="No support grants"
         emptySubtitle="Grants you issue will appear here."
-        rowActions={row => row.grant_status === 'ACTIVE' ? <Button variant="danger" size="sm" onClick={() => handleRevoke(row.id)}>Revoke</Button> : undefined}
+        rowActions={row => row.grant_status === 'ACTIVE' ? (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Button variant="secondary" size="sm" onClick={() => handleSelectGrant(row)}>Enter tenant</Button>
+            <Button variant="danger" size="sm" onClick={() => handleRevoke(row.id)}>Revoke</Button>
+          </div>
+        ) : undefined}
       />
+      {selectedGrant && (
+        <div style={{ display: 'flex', alignItems: 'end', gap: 12, marginTop: 16, maxWidth: 620 }}>
+          <FormField label={`Workspace in ${selectedGrant.target_organisation_name}`} required>
+            <SelectInput value={workspaceId} onChange={event => setWorkspaceId(event.target.value)}>
+              <option value="">Select workspace</option>
+              {workspaces.map(workspace => <option key={workspace.workspaceId} value={workspace.workspaceId}>{workspace.workspaceName}</option>)}
+            </SelectInput>
+          </FormField>
+          <Button onClick={handleEnter} loading={entering} disabled={!workspaceId}>Open read-only context</Button>
+        </div>
+      )}
     </div>
   );
 };
