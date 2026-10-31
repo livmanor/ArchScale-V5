@@ -273,6 +273,37 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.fn_app_support_context_can_read(UUID) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.fn_app_support_context_can_read(UUID) TO archscale_app_runtime;
 
+CREATE OR REPLACE FUNCTION public.fn_app_member_label(p_membership_id UUID)
+RETURNS TEXT
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+        v_context_id UUID;
+        v_context_org_id UUID;
+        v_label TEXT;
+BEGIN
+        v_context_id := fn_current_context_id();
+        IF v_context_id IS NULL OR NOT is_context_valid(v_context_id) THEN RETURN NULL; END IF;
+        SELECT organisation_id INTO v_context_org_id
+            FROM public.access_contexts WHERE id = v_context_id;
+
+        SELECT COALESCE(NULLIF(u.email, ''), m.id::text)
+            INTO v_label
+            FROM public.memberships m
+            LEFT JOIN public.users u ON u.id = m.user_id
+         WHERE m.id = p_membership_id
+             AND m.organisation_id = v_context_org_id
+             AND m.status = 'ACTIVE';
+        RETURN v_label;
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.fn_app_member_label(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.fn_app_member_label(UUID) TO archscale_app_runtime;
+
 DROP POLICY IF EXISTS tasks_select_policy ON public.tasks;
 CREATE POLICY tasks_select_policy ON public.tasks FOR SELECT TO archscale_app_runtime
 USING (

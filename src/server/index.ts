@@ -75,7 +75,7 @@ export function createServer(
         return res.status(404).send('Not Found');
     });
 
-    app.get(['/recover', '/forgot-password'], (_req: Request, res: Response) => {
+    app.get(['/recover', '/forgot-password', '/accept'], (_req: Request, res: Response) => {
         const filePath = path.join(__dirname, 'public', 'index.html');
         if (!fs.existsSync(filePath)) return res.status(404).send('Not Found');
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -1164,10 +1164,13 @@ export function createServer(
     // use the request context transaction established by requireContext.
     app.get('/api/tasks', authenticate, requireContext, async (req: Request, res: Response) => {
         const client = (req as any).dbClient as PoolClient;
-        const result = await client.query(`SELECT t.* FROM public.tasks t ORDER BY t.due_at NULLS LAST, t.created_at DESC`);
+        const result = await client.query(`SELECT t.*,
+            public.fn_app_member_label(t.assigned_to_membership_id) AS assigned_to_name,
+            public.fn_app_member_label(t.reviewer_membership_id) AS reviewer_name
+            FROM public.tasks t ORDER BY t.due_at NULLS LAST, t.created_at DESC`);
         const tasks = result.rows.map((r: any) => ({ id:r.id, workId:r.work_id, title:r.title, description:r.description,
-            assignedToId:r.assigned_to_membership_id, assignedToName:r.assigned_to_membership_id,
-            department:r.department, reviewerId:r.reviewer_membership_id, reviewerName:r.reviewer_membership_id,
+            assignedToId:r.assigned_to_membership_id, assignedToName:r.assigned_to_name,
+            department:r.department, reviewerId:r.reviewer_membership_id, reviewerName:r.reviewer_name,
             startDate:r.start_date, dueDateTime:r.due_at, priority:r.priority, status:r.status,
             approvalStatus:r.approval_status, createdById:r.created_by_membership_id,
             approvedById:r.approved_by_membership_id }));
@@ -1219,9 +1222,13 @@ export function createServer(
     // --- TEST APPLICATION B: ATTENDANCE (RESTRICTED ACCESS) ---
     app.get('/api/attendance', authenticate, requireContext, async (req: Request, res: Response) => {
         const client = (req as any).dbClient as PoolClient;
-        const result = await client.query(`SELECT r.*, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',c.id,'authorId',c.author_membership_id,'text',c.body,'timestamp',c.created_at) ORDER BY c.created_at) FROM public.attendance_comments c WHERE c.attendance_record_id=r.id),'[]'::jsonb) AS hr_comments FROM public.attendance_records r ORDER BY r.attendance_date DESC,r.membership_id`);
+        const result = await client.query(`SELECT r.*,
+            public.fn_app_member_label(r.membership_id) AS member_name,
+            COALESCE((SELECT jsonb_agg(jsonb_build_object('id',c.id,'author',public.fn_app_member_label(c.author_membership_id),'text',c.body,'timestamp',c.created_at) ORDER BY c.created_at)
+                FROM public.attendance_comments c WHERE c.attendance_record_id=r.id),'[]'::jsonb) AS hr_comments
+            FROM public.attendance_records r ORDER BY r.attendance_date DESC,r.membership_id`);
         return res.status(200).json({ records: result.rows.map((r:any)=>({ id:r.id,attendanceId:r.attendance_id,memberId:r.membership_id,
-            memberName:r.membership_id,department:r.department,date:r.attendance_date,checkInTime:r.check_in,checkOutTime:r.check_out,
+            memberName:r.member_name,department:r.department,date:r.attendance_date,checkInTime:r.check_in,checkOutTime:r.check_out,
             status:r.status,remarks:r.remarks,hrComments:r.hr_comments,createdBy:r.created_by_membership_id,lastUpdatedBy:r.last_updated_by_membership_id })) });
     });
 
