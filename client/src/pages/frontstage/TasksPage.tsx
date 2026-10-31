@@ -52,10 +52,11 @@ export const TasksPage: React.FC = () => {
   const activeRole = context?.roleKey;
   const activeDept = context?.department;
   const activeMemberId = context?.membershipId;
+  const isSupportReadOnly = !!context?.supportGrantId;
 
   const isJunior = activeRole === 'intern';
   const isManager = activeRole === 'leader' || activeRole === 'manager_coordinator';
-  const isTenantAdmin = activeRole === 'business_owner' || activeRole === 'founder';
+  const isTenantAdmin = !isSupportReadOnly && (activeRole === 'business_owner' || activeRole === 'founder');
   const canCreateTask = isTenantAdmin || isManager;
 
   const { values, errors, set, validate, reset, submitting, setSubmitting, dirty } = useForm<TaskForm>(
@@ -185,9 +186,9 @@ export const TasksPage: React.FC = () => {
           const isPeerDesign = activeDept === 'Design' && isManager && !isOwnAssigned && row.reviewerId !== activeMemberId;
 
           // Juniors can only update status on their own task
-          const canUpdateStatus = isTenantAdmin || (isManager && !isPeerDesign) || (isJunior && isOwnAssigned);
+          const canUpdateStatus = !isSupportReadOnly && (isTenantAdmin || (isManager && !isPeerDesign) || (isJunior && isOwnAssigned));
           // Only managers and admins can approve tasks
-          const canApprove = (isTenantAdmin || isManager) && (row.reviewerId === activeMemberId || isTenantAdmin);
+          const canApprove = !isSupportReadOnly && (isTenantAdmin || isManager) && (row.reviewerId === activeMemberId || isTenantAdmin);
 
           if (isPeerDesign) {
             return (
