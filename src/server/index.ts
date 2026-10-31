@@ -64,7 +64,7 @@ export function createServer(
         return (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
     };
 
-    // 0. Static demo UI
+    // Serve the production UI bundle.
     app.use(express.static(path.join(__dirname, 'public')));
     app.get('/', (req: Request, res: Response) => {
         const filePath = path.join(__dirname, 'public', 'index.html');
@@ -73,75 +73,6 @@ export function createServer(
             return res.status(200).send(fs.readFileSync(filePath, 'utf-8'));
         }
         return res.status(404).send('Not Found');
-    });
-
-    app.get('/demo', (req: Request, res: Response) => {
-        return res.status(200).json({ status: 'ok', name: 'ArchScale Auth Demo' });
-    });
-
-    // Demo identity endpoints are disabled in every deployed environment. They
-    // used to elevate arbitrary shared demo identities to AAL2 and are not an
-    // authentication mechanism for real tenants.
-    app.get('/api/demo/presets', (_req: Request, res: Response) =>
-        res.status(404).json({ error: 'NOT_FOUND' }));
-
-    app.post('/api/demo/quick-login', async (req: Request, res: Response) => {
-        if (process.env.NODE_ENV !== 'test' || process.env.ALLOW_LOCAL_AUTH !== 'true') {
-            return res.status(404).json({ error: 'NOT_FOUND' });
-        }
-        try {
-            const { key, autoElevate } = req.body || {};
-            const testUsersPath = path.join(process.cwd(), '.local/test-users.json');
-            if (fs.existsSync(testUsersPath)) {
-                const users = JSON.parse(fs.readFileSync(testUsersPath, 'utf-8'));
-                const personaMap: Record<string, { baseKey: string; role: string; dept: string; title: string; memberId: string }> = {
-                    'founder':          { baseKey: 'founder',          role: 'founder',             dept: 'Platform',   title: 'Platform Super Admin',  memberId: 'mem-00' },
-                    'tenant_admin':     { baseKey: 'business_owner',   role: 'business_owner',      dept: 'Management', title: 'Tenant Admin',           memberId: 'mem-01' },
-                    'business_owner':   { baseKey: 'business_owner',   role: 'business_owner',      dept: 'Management', title: 'Tenant Admin',           memberId: 'mem-01' },
-                    'design_manager_1': { baseKey: 'leader',           role: 'leader',              dept: 'Design',     title: 'Design Manager 1',       memberId: 'lead-01' },
-                    'junior_designer_1':{ baseKey: 'leader',           role: 'intern',              dept: 'Design',     title: 'Junior Designer 1',      memberId: 'des-01' },
-                    'design_manager_2': { baseKey: 'leader',           role: 'leader',              dept: 'Design',     title: 'Design Manager 2',       memberId: 'lead-02' },
-                    'junior_designer_2':{ baseKey: 'leader',           role: 'intern',              dept: 'Design',     title: 'Junior Designer 2',      memberId: 'des-02' },
-                    'design_manager_3': { baseKey: 'leader',           role: 'leader',              dept: 'Design',     title: 'Design Manager 3',       memberId: 'lead-03' },
-                    'junior_designer_3':{ baseKey: 'leader',           role: 'intern',              dept: 'Design',     title: 'Junior Designer 3',      memberId: 'des-03' },
-                    'accounts_manager': { baseKey: 'business_owner',   role: 'manager_coordinator', dept: 'Accounts',   title: 'Accounts Manager',       memberId: 'acc-01' },
-                    'junior_accountant':{ baseKey: 'business_owner',   role: 'intern',              dept: 'Accounts',   title: 'Junior Accountant',      memberId: 'acc-02' },
-                    'hr_manager':       { baseKey: 'business_owner',   role: 'manager_coordinator', dept: 'HR',         title: 'HR Manager',             memberId: 'hr-01' },
-                    'junior_hr':        { baseKey: 'business_owner',   role: 'intern',              dept: 'HR',         title: 'Junior HR',              memberId: 'hr-02' },
-                };
-
-                const persona = personaMap[key] || { baseKey: key, role: key, dept: 'General', title: key, memberId: 'mem-00' };
-                // Always use the business_owner account as the shared demo identity for all non-founder personas
-                // This ensures all personas are in the same org and can create contexts
-                const resolvedBaseKey = (key === 'founder') ? 'founder' : 'business_owner';
-                const user = users[resolvedBaseKey] || users[persona.baseKey] || users[key];
-                if (user) {
-                    const idp = identityProvider || getIdentityProvider();
-                    const session = await idp.signIn({ email: user.email, password: user.password });
-                    // All demo personas get elevated to aal2 automatically (no TOTP friction in dev)
-                    elevatedPrincipals.add(session.principal.id);
-                    if (session.principal.sessionId) elevatedPrincipals.add(session.principal.sessionId);
-                    session.principal.aal = 'aal2';
-                    return res.status(200).json({
-                        accessToken: session.accessToken,
-                        refreshToken: session.refreshToken,
-                        principal: {
-                            ...session.principal,
-                            role: persona.role,
-                            department: persona.dept,
-                            jobRole: persona.title,
-                            personaKey: key,
-                            memberId: (persona as any).memberId
-                        },
-                        mfaRequired: false,
-                        demoPersona: { key, role: persona.role, dept: persona.dept, title: persona.title, memberId: (persona as any).memberId }
-                    });
-                }
-            }
-        } catch (err: any) {
-            return res.status(401).json({ error: err.message || 'QUICK_LOGIN_FAILED' });
-        }
-        return res.status(404).json({ error: 'USER_PRESET_NOT_FOUND' });
     });
 
     // 1. POST /api/session/sign-in
