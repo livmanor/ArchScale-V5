@@ -79,6 +79,13 @@ async function main() {
                          )
                          ORDER BY table_name, constraint_name
                     `);
+                    const triggers = await client.query(`
+                            SELECT event_object_table AS table_name, trigger_name, event_manipulation, action_timing, action_statement
+                                FROM information_schema.triggers
+                             WHERE trigger_schema = 'public'
+                                 AND event_object_table IN ('tasks','attendance_records','attendance_comments')
+                             ORDER BY event_object_table, trigger_name
+                    `);
                     const dataShape = await client.query(`
                         SELECT
                           (SELECT count(*)::int FROM public.tasks WHERE tenant_id IS NULL) AS tasks_without_tenant,
@@ -163,6 +170,7 @@ async function main() {
             requiredColumns: columns.rows,
             tableColumns: tableColumns.rows,
             appConstraints: constraints.rows,
+            appTriggers: triggers.rows,
             appDataShape: dataShape.rows[0],
             existingAppPolicies: appPolicies.rows,
             appTablePrivileges: privileges.rows,

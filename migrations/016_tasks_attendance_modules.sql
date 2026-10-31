@@ -63,13 +63,12 @@ BEGIN
 END $$;
 
 UPDATE public.tasks t
-   SET workspace_id = w.id
-  FROM LATERAL (
-      SELECT id FROM public.workspaces
-       WHERE organisation_id = t.organisation_id AND is_active
-       ORDER BY is_default DESC, created_at, id
-       LIMIT 1
-  ) w
+     SET workspace_id = (
+             SELECT w.id FROM public.workspaces w
+                WHERE w.organisation_id = t.organisation_id AND w.is_active
+                ORDER BY w.is_default DESC, w.created_at, w.id
+                LIMIT 1
+     )
  WHERE t.workspace_id IS NULL;
 
 UPDATE public.tasks
@@ -135,13 +134,12 @@ BEGIN
 END $$;
 
 UPDATE public.attendance_records a
-   SET workspace_id = w.id
-  FROM LATERAL (
-      SELECT id FROM public.workspaces
-       WHERE organisation_id = a.organisation_id AND is_active
-       ORDER BY is_default DESC, created_at, id
-       LIMIT 1
-  ) w
+     SET workspace_id = (
+             SELECT w.id FROM public.workspaces w
+                WHERE w.organisation_id = a.organisation_id AND w.is_active
+                ORDER BY w.is_default DESC, w.created_at, w.id
+                LIMIT 1
+     )
  WHERE a.workspace_id IS NULL;
 
 UPDATE public.attendance_records
@@ -403,6 +401,23 @@ DROP TRIGGER IF EXISTS attendance_bind_actor ON public.attendance_records;
 CREATE TRIGGER attendance_bind_actor BEFORE INSERT OR UPDATE ON public.attendance_records FOR EACH ROW EXECUTE FUNCTION public.fn_app_bind_record_actor();
 DROP TRIGGER IF EXISTS attendance_comments_bind_actor ON public.attendance_comments;
 CREATE TRIGGER attendance_comments_bind_actor BEFORE INSERT ON public.attendance_comments FOR EACH ROW EXECUTE FUNCTION public.fn_app_bind_record_actor();
+
+-- Replace every legacy policy on the app tables so permissive policies from an
+-- earlier schema cannot OR around the current context-bound authorization.
+DO $$
+DECLARE v_policy RECORD;
+BEGIN
+    FOR v_policy IN
+        SELECT schemaname, tablename, policyname
+          FROM pg_policies
+         WHERE schemaname = 'public'
+           AND tablename IN ('tasks', 'attendance_records', 'attendance_comments')
+    LOOP
+        EXECUTE format('DROP POLICY %I ON %I.%I', v_policy.policyname, v_policy.schemaname, v_policy.tablename);
+    END LOOP;
+END $$;
+
+REVOKE ALL ON public.tasks, public.attendance_records, public.attendance_comments FROM PUBLIC, anon, authenticated, archscale_app_runtime;
 
 ALTER TABLE public.app_authorization_policies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.app_authorization_policies FORCE ROW LEVEL SECURITY;
