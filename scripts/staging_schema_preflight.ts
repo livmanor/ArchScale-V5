@@ -56,13 +56,47 @@ async function main() {
                )
         `);
                 const tableColumns = await client.query(`
-                        SELECT table_name, array_agg(column_name ORDER BY ordinal_position) AS columns
+                    SELECT table_name, json_agg(json_build_object(
+                               'name', column_name,
+                               'type', data_type,
+                               'udt', udt_name,
+                               'nullable', is_nullable
+                           ) ORDER BY ordinal_position) AS columns
                             FROM information_schema.columns
                          WHERE table_schema = 'public'
                              AND table_name IN ('tasks', 'attendance_records', 'attendance_comments', 'app_record_audit', 'workspaces', 'memberships')
                          GROUP BY table_name
                          ORDER BY table_name
                 `);
+                    const constraints = await client.query(`
+                        SELECT c.conrelid::regclass::text AS table_name, c.conname AS constraint_name,
+                               c.contype AS type, pg_get_constraintdef(c.oid) AS definition
+                          FROM pg_constraint c
+                         WHERE c.conrelid IN (
+                             to_regclass('public.tasks'), to_regclass('public.attendance_records'),
+                             to_regclass('public.attendance_comments')
+                         )
+                         ORDER BY table_name, constraint_name
+                    `);
+                    const dataShape = await client.query(`
+                        SELECT
+                          (SELECT count(*)::int FROM public.tasks WHERE tenant_id IS NULL) AS tasks_without_tenant,
+                          (SELECT count(*)::int FROM public.tasks WHERE assigned_to_membership_id IS NULL) AS tasks_without_assignee,
+                          (SELECT count(*)::int FROM public.tasks WHERE created_by_membership_id IS NULL) AS tasks_without_creator,
+                                (SELECT count(*)::int FROM public.tasks WHERE reporting_manager_membership_id IS NULL) AS tasks_without_reviewer_candidate,
+                          (SELECT count(*)::int FROM public.attendance_records WHERE tenant_id IS NULL) AS attendance_without_tenant,
+                          (SELECT count(*)::int FROM public.attendance_records WHERE membership_id IS NULL) AS attendance_without_member,
+                                (SELECT count(*)::int FROM public.attendance_comments) AS attendance_comment_count,
+                                (SELECT count(*)::int FROM public.tasks t WHERE NOT EXISTS (SELECT 1 FROM public.workspaces w WHERE w.organisation_id=t.tenant_id AND w.is_active)) AS tasks_without_active_workspace,
+                                (SELECT count(*)::int FROM public.attendance_records a WHERE NOT EXISTS (SELECT 1 FROM public.workspaces w WHERE w.organisation_id=a.tenant_id AND w.is_active)) AS attendance_without_active_workspace
+                    `);
+                    const appPolicies = await client.query(`
+                            SELECT tablename, policyname, cmd, permissive, roles
+                                FROM pg_policies
+                             WHERE schemaname = 'public'
+                                 AND tablename IN ('tasks','attendance_records','attendance_comments')
+                             ORDER BY tablename, policyname
+                    `);
         const functions = await client.query(`
             SELECT proname FROM pg_proc p
             JOIN pg_namespace n ON n.oid = p.pronamespace
@@ -117,6 +151,9 @@ async function main() {
             schema: state,
             requiredColumns: columns.rows,
             tableColumns: tableColumns.rows,
+            appConstraints: constraints.rows,
+            appDataShape: dataShape.rows[0],
+            existingAppPolicies: appPolicies.rows,
             requiredFunctions: functions.rows.map((row: { proname: string }) => row.proname),
             seeded,
             rowCounts,
