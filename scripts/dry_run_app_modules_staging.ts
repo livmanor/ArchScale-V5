@@ -42,10 +42,11 @@ async function main() {
         inTransaction = true;
         for (const [directory, file] of files) {
             const fullPath = path.resolve(here, '..', directory === 'migration' ? 'migrations' : 'seeds', file);
+            const sql = fs.readFileSync(fullPath, 'utf8');
             try {
-                await client.query(fs.readFileSync(fullPath, 'utf8'));
+                await client.query(sql);
             } catch (error: any) {
-                console.error(`FAILED_FILE=${file}; SQLSTATE=${error?.code || 'unknown'}; COLUMN=${error?.column || 'unknown'}; TABLE=${error?.table || 'unknown'}`);
+                console.error(`FAILED_FILE=${file}; SQLSTATE=${error?.code || 'unknown'}; POSITION=${error?.position || 'unknown'}; ERROR=${error?.message || 'unknown'}`);
                 throw error;
             }
             console.log(`Applied in transaction: ${file}`);

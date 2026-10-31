@@ -55,6 +55,14 @@ async function main() {
                    ('attendance_records', 'membership_id')
                )
         `);
+                const tableColumns = await client.query(`
+                        SELECT table_name, array_agg(column_name ORDER BY ordinal_position) AS columns
+                            FROM information_schema.columns
+                         WHERE table_schema = 'public'
+                             AND table_name IN ('tasks', 'attendance_records', 'attendance_comments', 'app_record_audit', 'workspaces', 'memberships')
+                         GROUP BY table_name
+                         ORDER BY table_name
+                `);
         const functions = await client.query(`
             SELECT proname FROM pg_proc p
             JOIN pg_namespace n ON n.oid = p.pronamespace
@@ -108,6 +116,7 @@ async function main() {
             projectRef,
             schema: state,
             requiredColumns: columns.rows,
+            tableColumns: tableColumns.rows,
             requiredFunctions: functions.rows.map((row: { proname: string }) => row.proname),
             seeded,
             rowCounts,
