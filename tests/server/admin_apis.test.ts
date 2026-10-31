@@ -42,6 +42,7 @@ let memberMembershipId: string;
 let staffToken: string;
 let staffSupportGrantId: string;
 let staffSupportContextId: string;
+let staffSessionId: string;
 
 beforeAll(async () => {
     process.env.ALLOW_LOCAL_AUTH = 'true';
@@ -141,6 +142,7 @@ beforeAll(async () => {
 
     const staffLogin = await localIdp.signIn({ email: 'staff@platform.local', password: 'test-password' });
     staffToken = staffLogin.accessToken;
+    staffSessionId = staffLogin.principal.sessionId!;
     const sCtx = await adminPool.query(`SELECT fn_create_access_context($1::uuid, $2, $3::uuid, $4::uuid, 'aal2', $5::uuid);`,
         [USER_STAFF_ID, staffLogin.principal.sessionId, SUB_ORG_ID, workspaceSubId, staffSupportGrantId]);
     staffSupportContextId = sCtx.rows[0].fn_create_access_context;
@@ -319,6 +321,16 @@ describe('Backstage Platform Administration APIs (A5)', () => {
         const { grantId } = await createRes.json();
         expect(grantId).toBeDefined();
 
+        const listRes = await fetch(`${baseUrl}/api/platform/support/grants`, {
+            headers: {
+                'Authorization': `Bearer ${founderToken}`,
+                'X-ArchScale-Context': founderContextId
+            }
+        });
+        expect(listRes.status).toBe(200);
+        const listData = await listRes.json();
+        expect(listData.grants.some((grant: any) => grant.id === grantId)).toBe(true);
+
         // Revoke grant
         const revokeRes = await fetch(`${baseUrl}/api/platform/support/grants/${grantId}/revoke`, {
             method: 'POST',
@@ -402,6 +414,30 @@ describe('A6 Verification Tests: Boundaries & Invariants', () => {
         expect(data.error).toBe('AUTH_SUPPORT_READ_ONLY');
     });
 
+    it('13b. A valid support context can read its tenant only and never satisfies write authorization', async () => {
+        const client = await adminPool.connect();
+        try {
+            await client.query('BEGIN');
+            await client.query(`SELECT fn_set_app_context($1::uuid, $2::uuid, $3::text);`, [staffSupportContextId, USER_STAFF_ID, staffSessionId]);
+            const allowedRead = await client.query<{ fn_app_support_context_can_read: boolean }>(
+                `SELECT fn_app_support_context_can_read($1::uuid);`, [SUB_ORG_ID]
+            );
+            const deniedOtherTenant = await client.query<{ fn_app_support_context_can_read: boolean }>(
+                `SELECT fn_app_support_context_can_read($1::uuid);`, [PLATFORM_ORG_ID]
+            );
+            const deniedWrite = await client.query<{ fn_app_record_allowed: boolean }>(
+                `SELECT fn_app_record_allowed('tasks','create',$1::uuid,'Design',$2::uuid,$2::uuid);`,
+                [SUB_ORG_ID, memberMembershipId]
+            );
+            expect(allowedRead.rows[0].fn_app_support_context_can_read).toBe(true);
+            expect(deniedOtherTenant.rows[0].fn_app_support_context_can_read).toBe(false);
+            expect(deniedWrite.rows[0].fn_app_record_allowed).toBe(false);
+            await client.query('ROLLBACK');
+        } finally {
+            client.release();
+        }
+    });
+
     it('14. Every registered route in SERVER_ROUTES has proper configuration', () => {
         for (const [key, def] of Object.entries(SERVER_ROUTES)) {
             expect(def.path).toBeDefined();
@@ -422,6 +458,13 @@ describe('A6 Verification Tests: Boundaries & Invariants', () => {
             body: JSON.stringify({ name: 'Approve Test Studio', tenantTypeKey: 'studio_owner' })
         });
         const { organisationId } = await createRes.json();
+                const provisioning = await adminPool.query(`
+                        SELECT
+                            (SELECT count(*)::int FROM public.workspaces WHERE organisation_id = $1) AS workspace_count,
+                            (SELECT count(*)::int FROM public.organisation_entitlements WHERE organisation_id = $1 AND app_key IN ('tasks','attendance') AND is_enabled) AS enabled_apps;
+                `, [organisationId]);
+                expect(provisioning.rows[0].workspace_count).toBeGreaterThanOrEqual(1);
+                expect(provisioning.rows[0].enabled_apps).toBe(2);
 
         // Approve it
         const approveRes = await fetch(`${baseUrl}/api/platform/organisations/${organisationId}/approve`, {
