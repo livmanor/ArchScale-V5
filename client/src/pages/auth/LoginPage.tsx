@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  signIn, signInByCode, verifyMfa, recovery, resetPassword,
+  signIn, signInByCode, verifyMfa, recovery, resetPassword, acceptInvitation,
   setToken, setRefreshToken, setContextId,
 } from '../../api/client';
 import type { SessionData } from '../../hooks/useSession';
@@ -19,6 +19,7 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
   const [notice, setNotice] = useState<string | null>(null);
   const [recoveryEmail, setRecoveryEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [invitationToken] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get('token'));
   const [resetToken] = useState(() => {
     const fragment = new URLSearchParams(window.location.hash.slice(1));
     return fragment.get('type') === 'recovery' ? fragment.get('access_token') : null;
@@ -35,6 +36,22 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
   // Manual login
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+
+  const completeLogin = async (session: SessionData) => {
+    if (invitationToken) {
+      setLoading(true);
+      const accepted = await acceptInvitation(invitationToken);
+      setLoading(false);
+      if (!accepted.ok) {
+        setError(accepted.message);
+        return;
+      }
+      window.history.replaceState(null, '', '/');
+      setNotice('Invitation accepted. Select your organisation and workspace to continue.');
+    }
+    onSuccess(session);
+  };
+
   const finaliseSession = (data: { accessToken: string; refreshToken?: string; principal: { id: string; email: string; aal: 'aal1'|'aal2'; role?: string; department?: string; jobRole?: string; sessionId?: string }; mfaRequired?: boolean }) => {
     // Guard: accessToken must be present or we cannot proceed
     if (!data.accessToken) {
@@ -55,7 +72,7 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
       setMfaSession({ token: data.accessToken, email: data.principal.email });
     } else {
       setContextId(null);
-      onSuccess(session);
+      void completeLogin(session);
     }
   };
 
@@ -127,7 +144,7 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
     setToken(session.accessToken);
     setRefreshToken(session.refreshToken ?? null);
     setContextId(null);
-    onSuccess(session);
+    void completeLogin(session);
   };
 
   // ── MFA step ──────────────────────────────────────────────────────────────
@@ -183,8 +200,10 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
 
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 24px' }}>
         <h1 style={{ fontSize: 'var(--font-size-h1)', marginBottom: 24 }}>
-          {recoveryMode === 'request' ? 'Reset your password' : recoveryMode === 'reset' ? 'Choose a new password' : 'Sign in'}
+          {recoveryMode === 'request' ? 'Reset your password' : recoveryMode === 'reset' ? 'Choose a new password' : invitationToken ? 'Accept invitation' : 'Sign in'}
         </h1>
+
+        {invitationToken && recoveryMode === 'login' && <Alert kind="info" style={{ marginBottom: 20 }}>Sign in to accept your invitation.</Alert>}
 
         {notice && <Alert kind="info" style={{ marginBottom: 20 }}>{notice}</Alert>}
         {error && <Alert kind="error" style={{ marginBottom: 20 }}>{error}</Alert>}
