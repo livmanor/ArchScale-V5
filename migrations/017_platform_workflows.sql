@@ -91,7 +91,11 @@ BEGIN
     IF v_context_id IS NULL OR NOT is_context_valid(v_context_id) THEN
         RAISE EXCEPTION 'AUTH_CONTEXT_INVALID' USING ERRCODE = 'P0001';
     END IF;
-    IF fn_current_context_portal() <> 'platform'::public.portal_type THEN
+    IF NOT EXISTS (
+        SELECT 1 FROM public.access_contexts ac
+        JOIN public.organisations o ON o.id = ac.organisation_id
+        WHERE ac.id = v_context_id AND o.portal = 'platform'
+    ) THEN
         RAISE EXCEPTION 'AUTH_PORTAL_DENIED' USING ERRCODE = '42501';
     END IF;
     IF NOT ('platform.support.manage' = ANY(fn_get_effective_permissions())) THEN
@@ -113,3 +117,66 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION public.fn_list_platform_support_grants() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.fn_list_platform_support_grants() TO archscale_app_runtime;
+
+CREATE OR REPLACE FUNCTION public.fn_platform_list_organisations()
+RETURNS TABLE (
+    id UUID,
+    name TEXT,
+    portal public.portal_type,
+    tenant_type_key TEXT,
+    status public.org_status,
+    member_min_aal TEXT,
+    created_at TIMESTAMPTZ
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public, extensions, pg_temp
+AS $$
+BEGIN
+    IF NOT is_context_valid() THEN
+        RAISE EXCEPTION 'AUTH_CONTEXT_INVALID' USING ERRCODE = 'P0001';
+    END IF;
+    IF NOT ('platform.organisations.read' = ANY(fn_get_effective_permissions())) THEN
+        RAISE EXCEPTION 'AUTH_PERMISSION_DENIED' USING ERRCODE = '42501';
+    END IF;
+    RETURN QUERY
+    SELECT o.id, o.name, o.portal, o.tenant_type_key, o.status, o.member_min_aal, o.created_at
+    FROM public.organisations o
+    ORDER BY o.name;
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.fn_platform_list_organisations() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.fn_platform_list_organisations() TO archscale_app_runtime;
+
+CREATE OR REPLACE FUNCTION public.fn_platform_get_organisation(p_organisation_id UUID)
+RETURNS TABLE (
+    id UUID,
+    name TEXT,
+    portal public.portal_type,
+    tenant_type_key TEXT,
+    status public.org_status,
+    member_min_aal TEXT,
+    created_at TIMESTAMPTZ
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public, extensions, pg_temp
+AS $$
+BEGIN
+    IF NOT is_context_valid() THEN
+        RAISE EXCEPTION 'AUTH_CONTEXT_INVALID' USING ERRCODE = 'P0001';
+    END IF;
+    IF NOT ('platform.organisations.read' = ANY(fn_get_effective_permissions())) THEN
+        RAISE EXCEPTION 'AUTH_PERMISSION_DENIED' USING ERRCODE = '42501';
+    END IF;
+    RETURN QUERY
+    SELECT o.id, o.name, o.portal, o.tenant_type_key, o.status, o.member_min_aal, o.created_at
+    FROM public.organisations o WHERE o.id = p_organisation_id;
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.fn_platform_get_organisation(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.fn_platform_get_organisation(UUID) TO archscale_app_runtime;
