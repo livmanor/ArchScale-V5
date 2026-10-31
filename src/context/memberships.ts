@@ -1,5 +1,5 @@
 import { runtimePool } from '../db/index.js';
-import { PoolClient } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 
 export interface PrincipalMembership {
     membershipId: string;
@@ -21,7 +21,7 @@ export interface OrgWorkspace {
  * Pre-context listing of active organisations and memberships for a verified principal.
  * Invokes fn_list_principal_memberships (SECURITY DEFINER, minimal columns).
  */
-export async function listPrincipalMemberships(userId: string, pool: any = runtimePool): Promise<PrincipalMembership[]> {
+export async function listPrincipalMemberships(userId: string, pool: Pool = runtimePool): Promise<PrincipalMembership[]> {
     if (!userId) return [];
 
     const client: PoolClient = await pool.connect();
@@ -58,7 +58,7 @@ export async function listPrincipalMemberships(userId: string, pool: any = runti
 export async function listOrgWorkspaces(
     userId: string,
     organisationId: string,
-    pool: any = runtimePool
+    pool: Pool = runtimePool
 ): Promise<OrgWorkspace[]> {
     if (!userId || !organisationId) return [];
 

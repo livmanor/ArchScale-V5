@@ -11,7 +11,7 @@ import { decide } from '../authz/decide.js';
 import crypto from 'crypto';
 import { sendInvitationMail } from '../mail/sink.js';
 import { generateTotpCode } from '../utils/totp.js';
-import { PoolClient } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -52,7 +52,7 @@ async function delayToFloor(startMs: number, floorMs: number = 1000) {
 
 export function createServer(
     identityProvider?: IdentityProvider,
-    dbPool: any = runtimePool
+    dbPool: Pool = runtimePool
 ): http.Server {
     const app = express();
 
