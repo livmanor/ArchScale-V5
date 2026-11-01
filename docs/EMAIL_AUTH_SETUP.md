@@ -155,3 +155,4 @@ Navigate to **Authentication** &rarr; **Email Templates**:
    ```bash
    npm test
    ```
+

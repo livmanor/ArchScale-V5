@@ -72,3 +72,4 @@ GRANT EXECUTE ON FUNCTION fn_platform_grant_role_permission(TEXT, TEXT) TO archs
 
 REVOKE EXECUTE ON FUNCTION fn_platform_revoke_role_permission(TEXT, TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION fn_platform_revoke_role_permission(TEXT, TEXT) TO archscale_app_runtime;
+

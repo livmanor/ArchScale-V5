@@ -65,3 +65,4 @@
 2. **Google OAuth Client Credentials**:
    - For Google sign-in and Google invitation acceptance on staging / production, ensure the Google Cloud Console OAuth Client has the Supabase callback URL configured:
      `https://<your-project-ref>.supabase.co/auth/v1/callback`
+
