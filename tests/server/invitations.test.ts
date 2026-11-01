@@ -757,8 +757,9 @@ describe('Invitations Engine API Integration Tests', () => {
             'Content-Type': 'application/json'
         };
         const checkIn = await fetch(`${attendanceBaseUrl}/api/attendance/check-in`, { method: 'POST', headers });
-        expect(checkIn.status).toBe(201);
-        const checkedIn = await checkIn.json();
+        const checkInBody = await checkIn.text();
+        expect(checkIn.status, checkInBody).toBe(201);
+        const checkedIn = JSON.parse(checkInBody);
         expect(checkedIn.record.membership_id).toBe(mgrMembershipId);
         expect(checkedIn.record.check_in).toBeDefined();
         expect(checkedIn.record.check_out).toBeNull();
