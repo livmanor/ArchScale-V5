@@ -13,3 +13,7 @@ const child = spawn(process.execPath, ['--import', 'tsx', serverPath], {
 child.on('exit', (code, signal) => {
   process.exit(code ?? (signal ? 1 : 0));
 });
+
+process.on('SIGTERM', () => child.kill('SIGTERM'));
+process.on('SIGINT', () => child.kill('SIGINT'));
+
