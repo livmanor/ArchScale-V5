@@ -32,6 +32,8 @@ let ownerContextId: string;
 let ownerToken: string;
 let leaderContextId: string;
 let leaderToken: string;
+let managerContextId: string;
+let managerToken: string;
 let internContextId: string;
 let internToken: string;
 let inviteeToken: string;
@@ -79,6 +81,7 @@ beforeAll(async () => {
 
     await adminPool.query(`INSERT INTO public.app_catalogue (app_key, name) VALUES ('core_app', 'Core App') ON CONFLICT DO NOTHING;`);
     await adminPool.query(`INSERT INTO public.organisation_entitlements (organisation_id, app_key, is_enabled) VALUES ($1, 'core_app', true) ON CONFLICT DO NOTHING;`, [ORG_ID]);
+    await adminPool.query(`INSERT INTO public.organisation_entitlements (organisation_id, app_key, is_enabled) VALUES ($1, 'attendance', true) ON CONFLICT (organisation_id, app_key) DO UPDATE SET is_enabled = true;`, [ORG_ID]);
 
     // Memberships
     await adminPool.query(`
@@ -117,6 +120,13 @@ beforeAll(async () => {
         SELECT fn_create_access_context($1::uuid, $2, $3::uuid, $4::uuid, 'aal1');
     `, [USER_LEADER_ID, leaderLogin.principal.sessionId, ORG_ID, workspaceId]);
     leaderContextId = leaderCtxRes.rows[0].fn_create_access_context;
+
+    const managerLogin = await localIdp.signIn({ email: 'mgr@inv.local', password: 'test-password' });
+    managerToken = managerLogin.accessToken;
+    const managerCtxRes = await adminPool.query(`
+        SELECT fn_create_access_context($1::uuid, $2, $3::uuid, $4::uuid, 'aal1');
+    `, [USER_MGR_ID, managerLogin.principal.sessionId, ORG_ID, workspaceId]);
+    managerContextId = managerCtxRes.rows[0].fn_create_access_context;
 
     const internLogin = await localIdp.signIn({ email: 'intern@inv.local', password: 'test-password' });
     internToken = internLogin.accessToken;
@@ -713,5 +723,35 @@ describe('Invitations Engine API Integration Tests', () => {
         // Verify no membership was left behind
         const checkMem = await adminPool.query(`SELECT COUNT(*) AS count FROM public.memberships WHERE user_id = $1 AND organisation_id = $2;`, [SEAT_USER_ID, ORG_ID]);
         expect(parseInt(checkMem.rows[0].count, 10)).toBe(0);
+    });
+
+    it('17. members can check in and out only for their own current-day record', async () => {
+        const headers = {
+            'Authorization': `Bearer ${managerToken}`,
+            'X-ArchScale-Context': managerContextId,
+            'Content-Type': 'application/json'
+        };
+        const checkIn = await fetch(`${baseUrl}/api/attendance/check-in`, { method: 'POST', headers });
+        expect(checkIn.status).toBe(201);
+        const checkedIn = await checkIn.json();
+        expect(checkedIn.record.membership_id).toBe(mgrMembershipId);
+        expect(checkedIn.record.check_in).toBeDefined();
+        expect(checkedIn.record.check_out).toBeNull();
+
+        const duplicate = await fetch(`${baseUrl}/api/attendance/check-in`, { method: 'POST', headers });
+        expect(duplicate.status).toBe(409);
+
+        const edit = await fetch(`${baseUrl}/api/attendance/${checkedIn.record.id}`, {
+            method: 'PATCH',
+            headers,
+            body: JSON.stringify({ status: 'Absent' })
+        });
+        expect(edit.status).toBe(403);
+
+        const checkOut = await fetch(`${baseUrl}/api/attendance/check-out`, { method: 'POST', headers });
+        expect(checkOut.status).toBe(200);
+        const checkedOut = await checkOut.json();
+        expect(checkedOut.record.check_out).toBeDefined();
+        expect(checkedOut.record.membership_id).toBe(mgrMembershipId);
     });
 });
