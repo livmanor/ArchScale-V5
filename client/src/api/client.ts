@@ -135,3 +135,34 @@ export const updateAttendance = (id: string, payload: unknown) =>
   api(`/api/attendance/${id}`, 'PATCH', payload);
 export const commentAttendance = (id: string, comment: string) =>
   api(`/api/attendance/${id}/comment`, 'POST', { comment });
+
+// ── RBAC Matrix & Governance (Backstage Founder / Platform Staff) ────────────
+export interface RbacRole {
+  key: string;
+  name: string;
+  description?: string;
+  portal: 'platform' | 'subscriber';
+  level: number;
+  min_aal: 'aal1' | 'aal2';
+  is_active: boolean;
+}
+
+export interface RbacPermission {
+  key: string;
+  name: string;
+  description?: string;
+  min_aal: 'aal1' | 'aal2';
+}
+
+export const getRbacMatrix = () =>
+  api<{
+    roles: RbacRole[];
+    permissions: RbacPermission[];
+    grants: Record<string, string[]>;
+  }>('/api/platform/rbac/matrix');
+
+export const grantRolePermission = (roleKey: string, permissionKey: string) =>
+  api('/api/platform/rbac/grant', 'POST', { roleKey, permissionKey });
+
+export const revokeRolePermission = (roleKey: string, permissionKey: string) =>
+  api('/api/platform/rbac/revoke', 'POST', { roleKey, permissionKey });
