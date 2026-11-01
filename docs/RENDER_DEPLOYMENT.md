@@ -53,3 +53,4 @@ To connect the Vercel frontend to your Render backend:
 3. Trigger a redeploy on Vercel (or push to `main`).
 
 Now `https://archscale-v5.vercel.app` will route all auth and RBAC API calls directly to your Render backend and authenticate with your live cloud Supabase database!
+

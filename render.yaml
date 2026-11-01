@@ -29,3 +29,4 @@ services:
         sync: false
       - key: SUPABASE_DB_ADMIN_URL
         sync: false
+
