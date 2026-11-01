@@ -43,8 +43,8 @@ export const App: React.FC = () => {
   const isHR = personaDept === 'HR';
   const isManager = personaRole === 'leader' || personaRole === 'manager_coordinator';
 
-  // Section 11: Attendance is strictly hidden from Tenant Admin, Design, Accounts
-  const showAttendance = isBackstage || isHR || !!context?.supportGrantId;
+  // Members can self-serve their own attendance; tenant-wide access remains restricted.
+  const showAttendance = isBackstage || isHR || !!context?.supportGrantId || context?.portal === 'subscriber';
   // Section 06: Invitations can only be managed by Tenant Admin
   const showInvitations = isTenantAdmin;
   // Section 13: Roles & Permissions preview visible to Tenant Admin and Managers
@@ -60,7 +60,7 @@ export const App: React.FC = () => {
   const frontstageNav: NavItem[] = [
     { key: 'tasks',       label: 'Tasks',              icon: '✓' },
     { key: 'team',        label: 'Team & Members',     icon: '👥' },
-    { key: 'attendance',  label: 'Attendance',         icon: '📅', hidden: !showAttendance },
+    { key: 'attendance',  label: isHR || context?.supportGrantId ? 'Attendance' : 'My Attendance', icon: '📅', hidden: !showAttendance },
     { key: 'invitations', label: 'Invitations',        icon: '✉', hidden: !showInvitations },
     { key: 'roles',       label: 'Roles & Permissions',icon: '🛡', hidden: !showRoles },
   ];
@@ -167,4 +167,3 @@ export const App: React.FC = () => {
     </SessionContext.Provider>
   );
 };
-

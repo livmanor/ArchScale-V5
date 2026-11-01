@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { getAttendance, updateAttendance, commentAttendance } from '../../api/client';
+import { getAttendance, checkInAttendance, checkOutAttendance, updateAttendance, commentAttendance } from '../../api/client';
 import { DataTable, Column } from '../../components/DataTable';
 import { PageHeader } from '../../components/PageHeader';
 import { Badge, statusVariant } from '../../components/Badge';
@@ -28,7 +28,9 @@ export const AttendancePage: React.FC = () => {
   const isSupportReadOnly = !!context?.supportGrantId;
   const isHRManager = activeDept === 'HR' && activeRole === 'manager_coordinator';
   const isJuniorHR = activeDept === 'HR' && activeRole === 'intern';
-  const isAuthorized = isHRManager || isJuniorHR || isSupportReadOnly;
+  const isSelfService = !!context?.membershipId && context.portal === 'subscriber' && !isSupportReadOnly;
+  const isAuthorized = isHRManager || isJuniorHR || isSupportReadOnly || isSelfService;
+  const canComment = isHRManager || isJuniorHR;
 
   // Detail drawer
   const [selected, setSelected] = useState<any | null>(null);
@@ -38,6 +40,8 @@ export const AttendancePage: React.FC = () => {
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
   const [commenting, setCommenting] = useState(false);
+  const [clocking, setClocking] = useState(false);
+  const [today, setToday] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -46,6 +50,7 @@ export const AttendancePage: React.FC = () => {
     setLoading(false);
     if (!res.ok) { setError(res.message); return; }
     setRecords(res.data?.records ?? []);
+    setToday(res.data?.today ?? '');
   }, []);
 
   useEffect(() => {
@@ -80,8 +85,26 @@ export const AttendancePage: React.FC = () => {
     load();
   };
 
+  const handleCheckIn = async () => {
+    setClocking(true);
+    const res = await checkInAttendance();
+    setClocking(false);
+    if (!res.ok) { addToast('error', res.message); return; }
+    addToast('success', 'Check-in recorded');
+    await load();
+  };
+
+  const handleCheckOut = async () => {
+    setClocking(true);
+    const res = await checkOutAttendance();
+    setClocking(false);
+    if (!res.ok) { addToast('error', res.message); return; }
+    addToast('success', 'Check-out recorded');
+    await load();
+  };
+
   const handleComment = async () => {
-    if (!selected || !comment.trim()) return;
+    if (!selected || !canComment || !comment.trim()) return;
     setCommenting(true);
     const res = await commentAttendance(selected.id, comment.trim());
     setCommenting(false);
@@ -95,6 +118,10 @@ export const AttendancePage: React.FC = () => {
       if (freshRecord) setSelected(freshRecord);
     }
   };
+
+  const todayRecord = records.find(record =>
+    record.memberId === context?.membershipId && String(record.date).slice(0, 10) === today
+  );
 
   const columns: Column<any>[] = [
     { key: 'attendanceId', label: 'Attendance ID', width: 120, render: row => row.attendanceId || row.id },
@@ -113,11 +140,11 @@ export const AttendancePage: React.FC = () => {
     return (
       <div className="page-body">
         <PageHeader
-          title="Attendance Application"
+          title={isSelfService ? 'My Attendance' : 'Attendance Application'}
           subtitle="Section 11 Restricted Access Module"
         />
         <Alert kind="error">
-          🔒 <strong>Section 11 Restricted Access Policy Enforced:</strong> Attendance is strictly confidential. Tenant Administrators, Design Managers, Accountants, and other non-HR members are denied access by default. Only Human Resources personnel and audited Platform Super Admins can access these records.
+          🔒 <strong>Section 11 Restricted Access Policy Enforced:</strong> Tenant-wide records are restricted to Human Resources and explicitly audited support access. Members can only access their own check-in/out record.
         </Alert>
       </div>
     );
@@ -127,12 +154,35 @@ export const AttendancePage: React.FC = () => {
     <div className="page-body">
       <ToastList toasts={toasts} onRemove={removeToast} />
       <PageHeader
-        title="Attendance Application"
+        title={isSelfService && !isHRManager && !isJuniorHR && !isSupportReadOnly ? 'My Attendance' : 'Attendance Application'}
         subtitle={isHRManager
-          ? "HR Manager View — Full tenant-wide view, record editing & comment privileges (Section 11)"
-          : "Junior HR View — View all records & append comments (Record editing restricted per Section 11)"
-        }
+          ? 'HR Manager View — Tenant-wide attendance, editing and comment privileges'
+          : isJuniorHR
+            ? 'Junior HR View — Tenant-wide read and comment access'
+            : isSelfService
+              ? 'Record your own attendance. HR can review and manage tenant records.'
+              : 'Audited support access — read only'}
       />
+
+      {isSelfService && (
+        <section style={{ padding: 16, background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', marginBottom: 'var(--sp-4)' }}>
+          <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)', marginBottom: 8 }}>
+            Today{today ? ` · ${new Date(`${today}T00:00:00`).toLocaleDateString()}` : ''}
+          </div>
+          {!todayRecord ? (
+            <Button onClick={handleCheckIn} loading={clocking}>Check In</Button>
+          ) : todayRecord.checkInTime && !todayRecord.checkOutTime ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <span>Checked in at <strong>{todayRecord.checkInTime}</strong></span>
+              <Button variant="secondary" onClick={handleCheckOut} loading={clocking}>Check Out</Button>
+            </div>
+          ) : todayRecord.checkOutTime ? (
+            <span>Attendance completed — {todayRecord.checkInTime} to {todayRecord.checkOutTime}</span>
+          ) : (
+            <span>Today’s attendance has already been recorded. Contact HR if it needs correction.</span>
+          )}
+        </section>
+      )}
 
       {isJuniorHR && (
         <div style={{ padding: '10px 14px', background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', marginBottom: 'var(--sp-4)', fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>
@@ -208,8 +258,7 @@ export const AttendancePage: React.FC = () => {
               </FormField>
             </div>
 
-            {/* HR Comments (Section 11: both HR Manager and Junior HR can append comments) */}
-            <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--sp-4)', marginTop: 'var(--sp-4)' }}>
+            {canComment && <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--sp-4)', marginTop: 'var(--sp-4)' }}>
               <div style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--color-text-subtle)', marginBottom: 'var(--sp-3)' }}>
                 Authenticated HR Comments Thread (Section 11)
               </div>
@@ -231,7 +280,7 @@ export const AttendancePage: React.FC = () => {
                 </div>
               )}
 
-              {!isSupportReadOnly && (
+              {canComment && (
                 <>
                   <FormField label="Append HR Comment">
                     <TextareaInput
@@ -251,7 +300,7 @@ export const AttendancePage: React.FC = () => {
                   </Button>
                 </>
               )}
-            </div>
+            </div>}
           </>
         )}
       </Drawer>

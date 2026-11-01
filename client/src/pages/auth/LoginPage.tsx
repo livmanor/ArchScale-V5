@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  signIn, signInByCode, verifyMfa, recovery, resetPassword, acceptInvitation,
+  signIn, signInByCode, verifyMfa, recovery, resetPassword, acceptInvitation, completeOAuthSession,
   setToken, setRefreshToken, setContextId,
 } from '../../api/client';
 import type { SessionData } from '../../hooks/useSession';
@@ -19,7 +19,14 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
   const [notice, setNotice] = useState<string | null>(null);
   const [recoveryEmail, setRecoveryEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [invitationToken] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get('token'));
+  const [invitationToken] = useState(() =>
+    new URLSearchParams(window.location.search).get('token') ??
+    new URLSearchParams(window.location.hash.slice(1)).get('token')
+  );
+  const [invitationAuthToken] = useState(() => {
+    const fragment = new URLSearchParams(window.location.hash.slice(1));
+    return invitationToken && fragment.get('type') === 'invite' ? fragment.get('access_token') : null;
+  });
   const [resetToken] = useState(() => {
     const fragment = new URLSearchParams(window.location.hash.slice(1));
     return fragment.get('type') === 'recovery' ? fragment.get('access_token') : null;
@@ -75,6 +82,38 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
       void completeLogin(session);
     }
   };
+
+  React.useEffect(() => {
+    if (!invitationAuthToken) return;
+    let active = true;
+    setLoading(true);
+    setNotice('Verifying your invitation link…');
+    void (async () => {
+      try {
+        const result = await completeOAuthSession(invitationAuthToken);
+        if (!active) return;
+        setLoading(false);
+        if (!result.ok || !result.data?.principal) {
+          setNotice(null);
+          setError(result.message || 'This invitation link could not be verified. Request a new invitation.');
+          return;
+        }
+        const fragment = new URLSearchParams(window.location.hash.slice(1));
+        finaliseSession({
+          accessToken: invitationAuthToken,
+          refreshToken: fragment.get('refresh_token') ?? undefined,
+          principal: result.data.principal,
+          mfaRequired: result.data.mfaRequired,
+        });
+      } catch {
+        if (!active) return;
+        setLoading(false);
+        setNotice(null);
+        setError('This invitation link could not be verified. Request a new invitation.');
+      }
+    })();
+    return () => { active = false; };
+  }, [invitationAuthToken]);
 
   const handleManualLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -322,4 +361,3 @@ const SUB: React.CSSProperties = {
   marginBottom: 24,
   lineHeight: 1.5,
 };
-

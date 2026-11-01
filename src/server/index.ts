@@ -1236,6 +1236,48 @@ export function createServer(
     });
 
     // --- TEST APPLICATION B: ATTENDANCE (RESTRICTED ACCESS) ---
+    app.post('/api/attendance/check-in', authenticate, requireContext, async (req: Request, res: Response) => {
+        const client = (req as any).dbClient as PoolClient;
+        const contextId: string = (req as any).contextId;
+        try {
+            const result = await client.query(`INSERT INTO public.attendance_records
+                (membership_id, department, attendance_date, check_in, status, remarks,
+                 created_by_membership_id, last_updated_by_membership_id)
+                SELECT ac.membership_id, m.department, CURRENT_DATE, LOCALTIME(0), 'Present', '',
+                       ac.membership_id, ac.membership_id
+                  FROM public.access_contexts ac
+                  JOIN public.memberships m ON m.id = ac.membership_id
+                 WHERE ac.id = $1::uuid AND ac.revoked_at IS NULL AND m.status = 'ACTIVE'
+                RETURNING *`, [contextId]);
+            if (!result.rowCount) return res.status(403).json({ error: 'ATTENDANCE_CHECK_IN_DENIED' });
+            return res.status(201).json({ success: true, record: result.rows[0] });
+        } catch (err: any) {
+            if (err.code === '23505') return res.status(409).json({ error: 'ATTENDANCE_ALREADY_RECORDED_TODAY' });
+            return res.status(403).json({ error: 'ATTENDANCE_CHECK_IN_DENIED', message: err.message });
+        }
+    });
+
+    app.post('/api/attendance/check-out', authenticate, requireContext, async (req: Request, res: Response) => {
+        const client = (req as any).dbClient as PoolClient;
+        const contextId: string = (req as any).contextId;
+        try {
+            const result = await client.query(`UPDATE public.attendance_records
+                  SET check_out = LOCALTIME(0)
+                WHERE membership_id = (
+                          SELECT membership_id FROM public.access_contexts
+                           WHERE id = $1::uuid AND revoked_at IS NULL
+                      )
+                  AND attendance_date = CURRENT_DATE
+                  AND check_in IS NOT NULL
+                  AND check_out IS NULL
+                RETURNING *`, [contextId]);
+            if (!result.rowCount) return res.status(409).json({ error: 'ATTENDANCE_NOT_CHECKED_IN' });
+            return res.status(200).json({ success: true, record: result.rows[0] });
+        } catch (err: any) {
+            return res.status(403).json({ error: 'ATTENDANCE_CHECK_OUT_DENIED', message: err.message });
+        }
+    });
+
     app.get('/api/attendance', authenticate, requireContext, async (req: Request, res: Response) => {
         const client = (req as any).dbClient as PoolClient;
         const result = await client.query(`SELECT r.*,
@@ -1243,7 +1285,8 @@ export function createServer(
             COALESCE((SELECT jsonb_agg(jsonb_build_object('id',c.id,'author',public.fn_app_member_label(c.author_membership_id),'text',c.body,'timestamp',c.created_at) ORDER BY c.created_at)
                 FROM public.attendance_comments c WHERE c.attendance_record_id=r.id),'[]'::jsonb) AS hr_comments
             FROM public.attendance_records r ORDER BY r.attendance_date DESC,r.membership_id`);
-        return res.status(200).json({ records: result.rows.map((r:any)=>({ id:r.id,attendanceId:r.attendance_id,memberId:r.membership_id,
+        const today = await client.query<{ today: string }>('SELECT CURRENT_DATE::text AS today');
+        return res.status(200).json({ today: today.rows[0]?.today, records: result.rows.map((r:any)=>({ id:r.id,attendanceId:r.attendance_id,memberId:r.membership_id,
             memberName:r.member_name,department:r.department,date:r.attendance_date,checkInTime:r.check_in,checkOutTime:r.check_out,
             status:r.status,remarks:r.remarks,hrComments:r.hr_comments,createdBy:r.created_by_membership_id,lastUpdatedBy:r.last_updated_by_membership_id })) });
     });

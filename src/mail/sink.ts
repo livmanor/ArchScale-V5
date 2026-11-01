@@ -20,14 +20,13 @@ export interface SendInvitationOptions {
 }
 
 export async function sendInvitationMail(options: SendInvitationOptions): Promise<{ success: boolean; messageId: string; inviteUrl: string }> {
-    const isStaging = process.env.ARCHSCALE_STAGING_TESTS === 'true' || !!process.env.SUPABASE_URL;
-    const baseUrl = process.env.ARCHSCALE_FRONTEND_URL || 'http://127.0.0.1:3000';
-    // B0.5: Token in URL fragment (#token=...), not query string (?token=...)
-    const inviteUrl = `${baseUrl}/accept#token=${options.rawToken}`;
+    const isolatedTest = process.env.NODE_ENV === 'test' && process.env.ALLOW_LOCAL_AUTH === 'true';
+    const baseUrl = (process.env.ARCHSCALE_FRONTEND_URL || 'http://127.0.0.1:3000').replace(/\/+$/, '');
+    const inviteUrl = `${baseUrl}/accept?token=${encodeURIComponent(options.rawToken)}`;
     const orgName = options.organisationName || 'ArchScale';
-    const body = `You have been invited to join ${orgName}.\n\nAccept your invitation by visiting:\n${inviteUrl}\n\nThis invitation link contains your secret token in the URL fragment.`;
+    const body = `You have been invited to join ${orgName}.\n\nAccept your invitation by visiting:\n${inviteUrl}\n\nThis invitation link contains your secret token.`;
 
-    if (isStaging && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    if (!isolatedTest && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
         try {
             const { createClient } = await import('@supabase/supabase-js');
             const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
@@ -54,7 +53,7 @@ export async function sendInvitationMail(options: SendInvitationOptions): Promis
 
     // The sink is a test fixture only. A configured server must never report a
     // successful invitation while silently keeping its token in process memory.
-    if (process.env.NODE_ENV !== 'test' || process.env.ALLOW_LOCAL_AUTH !== 'true') {
+    if (!isolatedTest) {
         throw new Error('Invitation delivery is not configured. Set Supabase Auth SMTP and server credentials.');
     }
 
@@ -83,4 +82,3 @@ export function getSentMails(): readonly SentMail[] {
 export function clearSentMails(): void {
     sentMails.length = 0;
 }
-

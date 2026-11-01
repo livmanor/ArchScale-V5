@@ -128,7 +128,9 @@ export const approveTask = (id: string, approvalStatus: string) =>
   api(`/api/tasks/${id}/approve`, 'POST', { approvalStatus });
 
 // ── Attendance ────────────────────────────────────────────────────────────────
-export const getAttendance = () => api<{ records: any[] }>('/api/attendance');
+export const getAttendance = () => api<{ records: any[]; today?: string }>('/api/attendance');
+export const checkInAttendance = () => api('/api/attendance/check-in', 'POST');
+export const checkOutAttendance = () => api('/api/attendance/check-out', 'POST');
 export const updateAttendance = (id: string, payload: unknown) =>
   api(`/api/attendance/${id}`, 'PATCH', payload);
 export const commentAttendance = (id: string, comment: string) =>
