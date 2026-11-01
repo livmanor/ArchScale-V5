@@ -28,9 +28,12 @@ export const AttendancePage: React.FC = () => {
   const isSupportReadOnly = !!context?.supportGrantId;
   const isHRManager = activeDept === 'HR' && activeRole === 'manager_coordinator';
   const isJuniorHR = activeDept === 'HR' && activeRole === 'intern';
+  const isBusinessOwner = activeRole === 'business_owner';
+  const canManageAttendance = isHRManager || isBusinessOwner;
+  const canMonitorTenant = isHRManager || isJuniorHR || isBusinessOwner || isSupportReadOnly;
   const isSelfService = !!context?.membershipId && context.portal === 'subscriber' && !isSupportReadOnly;
-  const isAuthorized = isHRManager || isJuniorHR || isSupportReadOnly || isSelfService;
-  const canComment = isHRManager || isJuniorHR;
+  const isAuthorized = canMonitorTenant || isSelfService;
+  const canComment = isHRManager || isJuniorHR || isBusinessOwner;
 
   // Detail drawer
   const [selected, setSelected] = useState<any | null>(null);
@@ -71,7 +74,7 @@ export const AttendancePage: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (!selected || !isHRManager) return;
+    if (!selected || !canManageAttendance) return;
     setSaving(true);
     const res = await updateAttendance(selected.id, {
       status: editStatus,
@@ -154,14 +157,16 @@ export const AttendancePage: React.FC = () => {
     <div className="page-body">
       <ToastList toasts={toasts} onRemove={removeToast} />
       <PageHeader
-        title={isSelfService && !isHRManager && !isJuniorHR && !isSupportReadOnly ? 'My Attendance' : 'Attendance Application'}
+        title={!canMonitorTenant && isSelfService ? 'My Attendance' : 'Attendance Application'}
         subtitle={isHRManager
-          ? 'HR Manager View — Tenant-wide attendance, editing and comment privileges'
-          : isJuniorHR
-            ? 'Junior HR View — Tenant-wide read and comment access'
-            : isSelfService
-              ? 'Record your own attendance. HR can review and manage tenant records.'
-              : 'Audited support access — read only'}
+          ? 'HR Manager View — Tenant-wide workforce attendance monitoring, editing, and comment privileges'
+          : isBusinessOwner
+            ? 'Business Owner View — Tenant workforce attendance oversight, status management, and review'
+            : isJuniorHR
+              ? 'Junior HR View — Tenant-wide read and review privileges'
+              : isSelfService
+                ? 'Record your own attendance. HR and Management review tenant records.'
+                : 'Audited support access — read only'}
       />
 
       {isSelfService && (
@@ -190,6 +195,12 @@ export const AttendancePage: React.FC = () => {
         </div>
       )}
 
+      {isBusinessOwner && (
+        <div style={{ padding: '10px 14px', background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', marginBottom: 'var(--sp-4)', fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>
+          👑 <strong>Business Owner Authority:</strong> You have full oversight to monitor, adjust statuses, correct work hours, and add notes for all employees and interns across your organization.
+        </div>
+      )}
+
       {isHRManager && (
         <div style={{ padding: '10px 14px', background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', marginBottom: 'var(--sp-4)', fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>
           ✓ <strong>HR Manager Authority (Section 11 Matrix):</strong> You have full write authority over attendance statuses, timestamps, and HR comments.
@@ -213,7 +224,7 @@ export const AttendancePage: React.FC = () => {
         open={!!selected}
         title={`Attendance Record — ${selected?.memberName ?? ''}`}
         onClose={() => setSelected(null)}
-        onSave={isHRManager ? handleSave : undefined}
+        onSave={canManageAttendance ? handleSave : undefined}
         saving={saving}
         saveLabel="Save Changes"
         width={520}
@@ -224,36 +235,36 @@ export const AttendancePage: React.FC = () => {
               <div><span style={{ color: 'var(--color-text-muted)' }}>Date:</span> <strong>{new Date(selected.date).toLocaleDateString()}</strong></div>
               <div><span style={{ color: 'var(--color-text-muted)' }}>Department:</span> <strong>{selected.department}</strong></div>
               <div><span style={{ color: 'var(--color-text-muted)' }}>Attendance ID:</span> <strong>{selected.attendanceId || selected.id}</strong></div>
-              <div><span style={{ color: 'var(--color-text-muted)' }}>Permissions:</span> <Badge variant={isHRManager ? 'success' : 'warning'}>{isHRManager ? 'Can Edit' : 'Read Only'}</Badge></div>
+              <div><span style={{ color: 'var(--color-text-muted)' }}>Permissions:</span> <Badge variant={canManageAttendance ? 'success' : 'warning'}>{canManageAttendance ? 'Can Edit' : 'Read Only'}</Badge></div>
             </div>
 
-            <FormField label="Status" hint={!isHRManager ? 'Read-only' : undefined}>
+            <FormField label="Status" hint={!canManageAttendance ? 'Read-only' : undefined}>
               <SelectInput
                 value={editStatus}
                 onChange={e => setEditStatus(e.target.value)}
-                disabled={!isHRManager}
+                disabled={!canManageAttendance}
               >
                 {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
               </SelectInput>
             </FormField>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--sp-4)' }}>
-              <FormField label="Check In Time" hint={!isHRManager ? "Read-only" : undefined}>
+              <FormField label="Check In Time" hint={!canManageAttendance ? "Read-only" : undefined}>
                 <TextInput
                   type="text"
                   placeholder="09:00 AM"
                   value={checkIn}
                   onChange={e => setCheckIn(e.target.value)}
-                  disabled={!isHRManager}
+                  disabled={!canManageAttendance}
                 />
               </FormField>
-              <FormField label="Check Out Time" hint={!isHRManager ? "Read-only" : undefined}>
+              <FormField label="Check Out Time" hint={!canManageAttendance ? "Read-only" : undefined}>
                 <TextInput
                   type="text"
                   placeholder="06:00 PM"
                   value={checkOut}
                   onChange={e => setCheckOut(e.target.value)}
-                  disabled={!isHRManager}
+                  disabled={!canManageAttendance}
                 />
               </FormField>
             </div>
