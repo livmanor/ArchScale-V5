@@ -43,9 +43,35 @@ async function testRoleAttendance(personaKey: string) {
   });
   const getData = await getRes.json();
   console.log(`GET attendance status: ${getRes.status}, count: ${getData.records?.length ?? 0}`);
-  if (getData.records?.length > 0) {
-    for (const r of getData.records) {
-      console.log(`  - Record ID: ${r.attendanceId}, Member: ${r.memberName}, Date: ${r.date}, Status: ${r.status}`);
+
+  if (personaKey === 'business_owner' || personaKey === 'hr_manager') {
+    const targetRecord = getData.records?.[0];
+    if (targetRecord) {
+      console.log(`Testing UPDATE status for record ${targetRecord.id}...`);
+      const updateRes = await fetch(`http://127.0.0.1:3000/api/attendance/${targetRecord.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'x-archscale-context': contextId,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: 'Present', remarks: `Verified by ${personaKey}` }),
+      });
+      const updateData = await updateRes.json();
+      console.log(`UPDATE status: ${updateRes.status}`, updateData.success ? 'SUCCESS' : updateData);
+
+      console.log(`Testing COMMENT for record ${targetRecord.id}...`);
+      const commentRes = await fetch(`http://127.0.0.1:3000/api/attendance/${targetRecord.id}/comment`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'x-archscale-context': contextId,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ comment: `Official review note by ${personaKey}` }),
+      });
+      const commentData = await commentRes.json();
+      console.log(`COMMENT status: ${commentRes.status}`, commentData.success ? 'SUCCESS' : commentData);
     }
   }
 }

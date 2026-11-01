@@ -6,6 +6,24 @@
 -- employee and intern attendance records.
 -- =============================================================================
 
+-- 0. Relax legacy columns on attendance_comments
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='attendance_comments' AND column_name='tenant_id') THEN
+        ALTER TABLE public.attendance_comments ALTER COLUMN tenant_id DROP NOT NULL;
+        ALTER TABLE public.attendance_comments ALTER COLUMN tenant_id SET DEFAULT NULL;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='attendance_comments' AND column_name='attendance_id') THEN
+        ALTER TABLE public.attendance_comments ALTER COLUMN attendance_id DROP NOT NULL;
+        ALTER TABLE public.attendance_comments ALTER COLUMN attendance_id SET DEFAULT NULL;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='attendance_comments' AND column_name='comment') THEN
+        ALTER TABLE public.attendance_comments ALTER COLUMN comment DROP NOT NULL;
+        ALTER TABLE public.attendance_comments ALTER COLUMN comment SET DEFAULT NULL;
+    END IF;
+END $$;
+
+
 -- 1. Ensure permissions exist in catalogue
 INSERT INTO public.permissions (key, name, description, min_aal)
 VALUES
