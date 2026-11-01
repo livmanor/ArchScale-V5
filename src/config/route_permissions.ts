@@ -295,6 +295,11 @@ export const ROUTE_PERMISSIONS: Record<string, RoutePermission> = {
         permission: 'platform.audit.read',
         portal: 'platform'
     },
+    'platform.roles.manage': {
+        permission: 'platform.roles.manage',
+        portal: 'platform',
+        isMutation: true
+    },
     'org.members.read': {
         permission: 'org.members.read',
         portal: 'subscriber'
