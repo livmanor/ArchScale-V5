@@ -26,7 +26,7 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
   );
   const [invitationAuthToken] = useState(() => {
     const fragment = new URLSearchParams(window.location.hash.slice(1));
-    return isInvitationPage && fragment.get('type') === 'invite' ? fragment.get('access_token') : null;
+    return isInvitationPage ? fragment.get('access_token') : null;
   });
   const [resetToken] = useState(() => {
     const fragment = new URLSearchParams(window.location.hash.slice(1));

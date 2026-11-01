@@ -41,12 +41,12 @@ export async function sendInvitationMail(options: SendInvitationOptions): Promis
                 }
             });
             if (error) {
-                console.error('[MailSink:Staging] Failed to send invite via Supabase:', error.message);
+                console.error('[MailDelivery:Supabase] Failed to send invite:', error.message);
                 throw error;
             }
             return { success: true, messageId: data?.user?.id || 'supabase-invite', inviteUrl };
         } catch (err: any) {
-            console.error('[MailSink:Staging] Supabase invite error:', err.message);
+            console.error('[MailDelivery:Supabase] Invite error:', err.message);
             throw err;
         }
     }

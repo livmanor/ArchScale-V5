@@ -156,6 +156,7 @@ export class SupabaseProvider implements IdentityProvider {
             audience: claims.aud,
             expiresAt: claims.exp
         };
+        // Invitation credentials are consumed server-side and must not appear in API JSON.
         Object.defineProperty(principal, 'userMetadata', {
             value: userData.user.user_metadata || {},
             enumerable: false
