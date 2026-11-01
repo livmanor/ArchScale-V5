@@ -31,8 +31,19 @@ export async function beginGoogleSignIn(): Promise<string | null> {
 
 export async function getOAuthCallbackSession(): Promise<{ session: Session | null; error: string | null }> {
   if (!browserAuth) return { session: null, error: 'Google sign-in is not configured for this application.' };
-  const { data, error } = await browserAuth.auth.getSession();
-  return { session: data.session, error: error?.message ?? null };
+  try {
+    const searchParams = new URLSearchParams(window.location.search);
+    const code = searchParams.get('code');
+    if (code) {
+      const { data, error } = await browserAuth.auth.exchangeCodeForSession(code);
+      if (error) return { session: null, error: error.message };
+      if (data?.session) return { session: data.session, error: null };
+    }
+    const { data, error } = await browserAuth.auth.getSession();
+    return { session: data.session, error: error?.message ?? null };
+  } catch (err: any) {
+    return { session: null, error: err?.message || 'Failed to exchange OAuth session.' };
+  }
 }
 
 export async function updateBrowserAuthSession(accessToken: string, refreshToken: string): Promise<void> {
