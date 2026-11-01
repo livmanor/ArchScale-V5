@@ -1,67 +1,52 @@
 import fs from 'fs';
-import { runtimePool } from '../src/db/index.js';
-import pg from 'pg';
-
-let env: Record<string, string> = {};
-for (const line of fs.readFileSync('.env', 'utf8').split(/\r?\n/)) {
-  const idx = line.indexOf('=');
-  if (idx > 0 && !line.startsWith('#')) env[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
-}
 
 const fixtures = JSON.parse(fs.readFileSync('.local/test-users.json', 'utf8'));
 
 async function testRoleAttendance(personaKey: string) {
   const user = fixtures[personaKey];
-  const client = new pg.Client({ connectionString: env.SUPABASE_DB_ADMIN_URL, ssl: { rejectUnauthorized: false } });
-  await client.connect();
-
   console.log(`\n========================================`);
   console.log(`Testing attendance for ${personaKey} (${user.email})...`);
 
-  // Find membership
-  const memRes = await client.query(
-    'SELECT id, organisation_id, role_key, department FROM public.memberships WHERE user_id = $1 AND status = $2 LIMIT 1',
-    [user.id, 'ACTIVE']
-  );
-  if (!memRes.rows.length) {
-    console.error(`No active membership found for ${personaKey}`);
-    await client.end();
+  // Sign In
+  const signInRes = await fetch('http://127.0.0.1:3000/api/session/sign-in', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: user.email, password: user.password }),
+  });
+  const signInData = await signInRes.json();
+  if (!signInRes.ok) {
+    console.error(`Sign in failed for ${personaKey}:`, signInData);
     return;
   }
-
-  const membership = memRes.rows[0];
-  const wsRes = await client.query('SELECT id FROM public.workspaces WHERE organisation_id = $1 LIMIT 1', [membership.organisation_id]);
-  const workspaceId = wsRes.rows[0].id;
+  const token = signInData.accessToken;
 
   // Create context
-  const ctxRes = await client.query(`
-    INSERT INTO public.access_contexts (principal_user_id, membership_id, organisation_id, workspace_id, role_key, auth_assurance_level, expires_at)
-    VALUES ($1, $2, $3, $4, $5, 'aal1', now() + interval '1 hour')
-    RETURNING id;
-  `, [user.id, membership.id, membership.organisation_id, workspaceId, membership.role_key]);
-  const contextId = ctxRes.rows[0].id;
-  await client.end();
+  const ctxRes = await fetch('http://127.0.0.1:3000/api/session/context', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      organisationId: user.orgId,
+      workspaceId: user.workspaceId,
+    }),
+  });
+  const ctxData = await ctxRes.json();
+  const contextId = ctxData.context?.contextId || ctxData.context?.id || ctxData.contextId || ctxData.id;
+  console.log(`Context created: ${contextId} (role: ${ctxData.context?.role_key}, dept: ${ctxData.context?.department})`);
 
-  // Now connect via runtime pool and query as runtime
-  const rClient = await runtimePool.connect();
-  try {
-    await rClient.query('BEGIN');
-    await rClient.query('SELECT public.fn_set_app_context($1::uuid)', [contextId]);
-    const res = await rClient.query(`
-      SELECT r.attendance_id, r.membership_id, r.status, r.check_in, r.check_out, r.department
-        FROM public.attendance_records r
-    `);
-    console.log(`Query SUCCESS! Visible record count for ${personaKey}: ${res.rows.length}`);
-    for (const row of res.rows) {
-      const isOwn = row.membership_id === membership.id;
-      console.log(`  - Record ${row.attendance_id} (dept: ${row.department}, status: ${row.status}) [${isOwn ? 'OWN RECORD' : 'OTHER EMPLOYEE'}]`);
+  // GET Attendance
+  const getRes = await fetch('http://127.0.0.1:3000/api/attendance', {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'x-archscale-context': contextId,
+    },
+  });
+  const getData = await getRes.json();
+  console.log(`GET attendance status: ${getRes.status}, count: ${getData.records?.length ?? 0}`);
+  if (getData.records?.length > 0) {
+    for (const r of getData.records) {
+      console.log(`  - Record ID: ${r.attendanceId}, Member: ${r.memberName}, Date: ${r.date}, Status: ${r.status}`);
     }
-    await rClient.query('COMMIT');
-  } catch (err: any) {
-    await rClient.query('ROLLBACK');
-    console.error(`Query FAILED for ${personaKey}:`, err.message);
-  } finally {
-    rClient.release();
   }
 }
 
@@ -69,7 +54,6 @@ async function run() {
   await testRoleAttendance('intern');
   await testRoleAttendance('business_owner');
   await testRoleAttendance('hr_manager');
-  await runtimePool.end();
 }
 
 run().catch(console.error);
