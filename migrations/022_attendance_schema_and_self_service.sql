@@ -12,7 +12,7 @@ ALTER TABLE public.attendance_records
     ALTER COLUMN date DROP NOT NULL,
     ALTER COLUMN department DROP NOT NULL,
     ALTER COLUMN department SET DEFAULT 'General',
-    ALTER COLUMN attendance_id SET DEFAULT ('ATT-' || upper(substr(encode(gen_random_bytes(8), 'hex'), 1, 12)));
+    ALTER COLUMN attendance_id SET DEFAULT ('ATT-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 12)));
 
 -- 2. Ensure tasks legacy columns are nullable
 ALTER TABLE public.tasks
@@ -25,7 +25,7 @@ CREATE OR REPLACE FUNCTION public.fn_app_bind_record_actor()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
     v_context UUID;
@@ -48,7 +48,7 @@ BEGIN
             NEW.organisation_id := v_org;
             NEW.workspace_id := v_workspace;
             NEW.tenant_id := v_org;
-            NEW.work_id := COALESCE(NEW.work_id, 'WRK-' || upper(substr(encode(gen_random_bytes(8), 'hex'), 1, 12)));
+            NEW.work_id := COALESCE(NEW.work_id, 'WRK-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 12)));
             NEW.task_title := COALESCE(NEW.task_title, NEW.title);
         ELSIF NEW.organisation_id <> OLD.organisation_id OR NEW.workspace_id <> OLD.workspace_id OR NEW.created_by_membership_id <> OLD.created_by_membership_id THEN
             RAISE EXCEPTION 'Task creator and tenant scope are immutable';
@@ -70,7 +70,7 @@ BEGIN
             NEW.tenant_id := v_org;
             NEW.date := COALESCE(NEW.attendance_date, CURRENT_DATE);
             NEW.department := COALESCE(NEW.department, 'General');
-            NEW.attendance_id := COALESCE(NEW.attendance_id, 'ATT-' || upper(substr(encode(gen_random_bytes(8), 'hex'), 1, 12)));
+            NEW.attendance_id := COALESCE(NEW.attendance_id, 'ATT-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 12)));
         ELSE
             IF NEW.organisation_id <> OLD.organisation_id OR NEW.workspace_id <> OLD.workspace_id OR NEW.membership_id <> OLD.membership_id OR NEW.created_by_membership_id <> OLD.created_by_membership_id THEN
                 RAISE EXCEPTION 'Attendance identity and ownership are immutable';
@@ -93,7 +93,7 @@ CREATE OR REPLACE FUNCTION public.fn_attendance_self_access(
     p_department TEXT
 ) RETURNS BOOLEAN
 LANGUAGE plpgsql STABLE SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
     v_context_id UUID;
