@@ -11,6 +11,7 @@
     "testbench": "node testbench/server.js",
     "proof": "node demo/server.js",
     "server": "npx tsx src/server/index.ts",
+    "start": "node dist/index.js",
     "dev:server": "npx tsx watch src/server/index.ts",
     "migrate:local": "npx tsx scripts/apply_local_migrations.ts",
     "build:ui": "vite build",

@@ -2,7 +2,8 @@ node_modules/
 .env
 .env.*
 !.env.example
-dist/
+dist/*
+!dist/index.js
 *.log
 .local/
 .vitest/
