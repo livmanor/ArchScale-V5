@@ -1156,22 +1156,29 @@ export function createServer(
         const newTokenHash = crypto.createHash('sha256').update(newRawToken).digest('hex');
 
         try {
+            await client.query('SAVEPOINT invitation_resend');
             await client.query(`SELECT fn_resend_invitation($1::uuid, $2);`, [req.params.id, newTokenHash]);
 
             // Fetch recipient email
             const invEmailQuery = await client.query(`SELECT email FROM public.invitations WHERE id = $1::uuid;`, [req.params.id]);
             const targetEmail = invEmailQuery.rows[0]?.email;
-            if (targetEmail) {
-                await sendInvitationMail({
-                    to: targetEmail,
-                    rawToken: newRawToken,
-                    invitationId: String(req.params.id),
-                    organisationName: decision.organisationName
-                });
-            }
+            if (typeof targetEmail !== 'string' || !targetEmail) throw new Error('INVITATION_RECIPIENT_NOT_FOUND');
+            await sendInvitationMail({
+                to: targetEmail,
+                rawToken: newRawToken,
+                invitationId: String(req.params.id),
+                organisationName: decision.organisationName
+            });
+            await client.query('RELEASE SAVEPOINT invitation_resend');
 
             return res.status(200).json({ success: true });
         } catch (err: any) {
+            await client.query('ROLLBACK TO SAVEPOINT invitation_resend').catch(rollbackErr =>
+                console.error('Failed to restore invitation after delivery failure:', rollbackErr.message)
+            );
+            await client.query('RELEASE SAVEPOINT invitation_resend').catch(rollbackErr =>
+                console.error('Failed to release invitation resend savepoint:', rollbackErr.message)
+            );
             return res.status(400).json({ error: err.message });
         }
     });
