@@ -210,3 +210,4 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION public.fn_approve_membership(UUID, UUID, TEXT) FROM PUBLIC;
 GRANT  EXECUTE ON FUNCTION public.fn_approve_membership(UUID, UUID, TEXT) TO archscale_app_runtime;
+
