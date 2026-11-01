@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from 'react';
-import { Spinner } from './Spinner';
 import { EmptyState } from './EmptyState';
 import { Button } from './Button';
 import { Alert } from './Alert';
@@ -31,28 +30,27 @@ interface DataTableProps<T extends Record<string, any>> {
 }
 
 const TH: React.CSSProperties = {
-  height: 'var(--row-height)',
-  padding: '0 12px',
+  height: 44,
+  padding: '0 16px',
   textAlign: 'left',
-  fontSize: 'var(--font-size-xs)',
-  fontWeight: 700,
-  color: 'var(--color-text-muted)',
-  background: 'var(--color-surface-2)',
+  fontSize: 12,
+  fontWeight: 600,
+  color: '#475467',
+  background: '#fafbfc',
   borderBottom: '1px solid var(--color-border)',
   position: 'sticky',
   top: 0,
   zIndex: 1,
   whiteSpace: 'nowrap',
-  letterSpacing: '0.5px',
-  textTransform: 'uppercase',
+  letterSpacing: '0.2px',
   userSelect: 'none',
 };
 
 const TD: React.CSSProperties = {
   height: 'var(--row-height)',
-  padding: '0 12px',
-  fontSize: 'var(--font-size-body)',
-  borderBottom: '1px solid var(--color-border)',
+  padding: '0 16px',
+  fontSize: 13,
+  borderBottom: '1px solid var(--color-border-subtle)',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
@@ -66,8 +64,8 @@ function SkeletonRow({ cols }: { cols: number }) {
       {Array.from({ length: cols }).map((_, i) => (
         <td key={i} style={TD}>
           <div style={{
-            height: 12,
-            borderRadius: 3,
+            height: 14,
+            borderRadius: 4,
             background: 'var(--color-border)',
             width: `${50 + (i * 17) % 40}%`,
             animation: 'pulse 1.4s ease-in-out infinite',
@@ -119,25 +117,38 @@ export function DataTable<T extends Record<string, any>>({
 
   return (
     <div>
-      {/* Search bar */}
+      {/* Search & Actions Bar */}
       {searchKeys && (
-        <div style={{ marginBottom: 'var(--sp-3)' }}>
-          <input
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Search…"
-            style={{
-              height: 'var(--input-height)',
-              padding: '0 10px',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius)',
-              fontSize: 'var(--font-size-body)',
-              background: 'var(--color-surface)',
-              color: 'var(--color-text)',
-              width: 260,
-              outline: 'none',
-            }}
-          />
+        <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ position: 'relative', width: 280 }}>
+            <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#98a2b3', fontSize: 13 }}>🔍</span>
+            <input
+              value={search}
+              onChange={e => { setSearch(e.target.value); setPage(1); }}
+              placeholder="Search..."
+              style={{
+                width: '100%',
+                height: 38,
+                padding: '0 12px 0 34px',
+                border: '1px solid #d0d5dd',
+                borderRadius: 'var(--radius)',
+                fontSize: 13,
+                background: 'var(--color-surface)',
+                color: 'var(--color-text)',
+                outline: 'none',
+                boxShadow: 'var(--shadow-xs)',
+                transition: 'border-color var(--transition), box-shadow var(--transition)',
+              }}
+              onFocus={e => {
+                e.currentTarget.style.borderColor = 'var(--color-accent)';
+                e.currentTarget.style.boxShadow = '0 0 0 3px rgba(249, 115, 22, 0.15)';
+              }}
+              onBlur={e => {
+                e.currentTarget.style.borderColor = '#d0d5dd';
+                e.currentTarget.style.boxShadow = 'var(--shadow-xs)';
+              }}
+            />
+          </div>
         </div>
       )}
 
@@ -153,10 +164,16 @@ export function DataTable<T extends Record<string, any>>({
         </Alert>
       )}
 
-      {/* Table */}
-      <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+      {/* Table Container */}
+      <div style={{
+        background: 'var(--color-surface)',
+        border: '1px solid var(--color-border)',
+        borderRadius: 'var(--radius-lg)',
+        boxShadow: 'var(--shadow-xs)',
+        overflow: 'hidden',
+      }}>
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', minWidth: 480 }}>
+          <table style={{ width: '100%', minWidth: 600 }}>
             <thead>
               <tr>
                 {columns.map(col => (
@@ -165,13 +182,17 @@ export function DataTable<T extends Record<string, any>>({
                     style={{ ...TH, width: col.width, cursor: col.sortable ? 'pointer' : 'default' }}
                     onClick={() => col.sortable && toggleSort(col.key)}
                   >
-                    {col.label}
-                    {col.sortable && sortKey === col.key && (
-                      <span style={{ marginLeft: 4, opacity: 0.7 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
-                    )}
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <span>{col.label}</span>
+                      {col.sortable && (
+                        <span style={{ fontSize: 11, color: sortKey === col.key ? 'var(--color-accent)' : '#98a2b3' }}>
+                          {sortKey === col.key ? (sortDir === 'asc' ? '↑' : '↓') : '⇅'}
+                        </span>
+                      )}
+                    </div>
                   </th>
                 ))}
-                {hasActions && <th style={{ ...TH, width: 80 }} />}
+                {hasActions && <th style={{ ...TH, width: 80, textAlign: 'right' }}>Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -189,8 +210,8 @@ export function DataTable<T extends Record<string, any>>({
                     <tr
                       key={String(row[keyField])}
                       onClick={() => onRowClick?.(row)}
-                      style={{ cursor: onRowClick ? 'pointer' : 'default' }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLTableRowElement).style.background = 'var(--color-surface-2)'; }}
+                      style={{ cursor: onRowClick ? 'pointer' : 'default', transition: 'background var(--transition)' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLTableRowElement).style.background = 'var(--color-surface-hover)'; }}
                       onMouseLeave={e => { (e.currentTarget as HTMLTableRowElement).style.background = ''; }}
                     >
                       {columns.map(col => (
@@ -209,19 +230,58 @@ export function DataTable<T extends Record<string, any>>({
             </tbody>
           </table>
         </div>
-      </div>
 
-      {/* Pagination */}
-      {!loading && !error && totalPages > 1 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 'var(--sp-3)', justifyContent: 'space-between', fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>
-          <span>{sorted.length} total rows</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Button variant="secondary" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>←</Button>
-            <span>Page {page} of {totalPages}</span>
-            <Button variant="secondary" size="sm" disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>→</Button>
+        {/* Pagination Footer */}
+        {!loading && !error && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '12px 20px',
+            borderTop: '1px solid var(--color-border)',
+            background: '#fafbfc',
+            fontSize: 13,
+            color: 'var(--color-text-muted)',
+          }}>
+            <span>Showing {sorted.length === 0 ? 0 : (page - 1) * pageSize + 1}-{Math.min(page * pageSize, sorted.length)} of {sorted.length} entries</span>
+            {totalPages > 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Button variant="secondary" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>
+                  ‹ Previous
+                </Button>
+                <div style={{ display: 'flex', gap: 4, margin: '0 4px' }}>
+                  {Array.from({ length: Math.min(5, totalPages) }).map((_, idx) => {
+                    const pNum = idx + 1;
+                    const isCur = page === pNum;
+                    return (
+                      <button
+                        key={pNum}
+                        onClick={() => setPage(pNum)}
+                        style={{
+                          minWidth: 28,
+                          height: 28,
+                          borderRadius: 6,
+                          border: isCur ? '1px solid var(--color-accent)' : '1px solid transparent',
+                          background: isCur ? 'var(--color-accent-light)' : 'transparent',
+                          color: isCur ? 'var(--color-accent)' : 'var(--color-text)',
+                          fontWeight: isCur ? 600 : 400,
+                          fontSize: 12,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {pNum}
+                      </button>
+                    );
+                  })}
+                </div>
+                <Button variant="secondary" size="sm" disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>
+                  Next ›
+                </Button>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
