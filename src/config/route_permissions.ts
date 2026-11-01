@@ -160,6 +160,26 @@ export const SERVER_ROUTES: Record<string, ServerRouteDef> = {
         kind: 'permission:platform.audit.read',
         portal: 'platform'
     },
+    'platform.rbac.matrix': {
+        path: '/api/platform/rbac/matrix',
+        method: 'GET',
+        kind: 'permission:platform.roles.manage',
+        portal: 'platform'
+    },
+    'platform.rbac.grant': {
+        path: '/api/platform/rbac/grant',
+        method: 'POST',
+        kind: 'permission:platform.roles.manage',
+        portal: 'platform',
+        isMutation: true
+    },
+    'platform.rbac.revoke': {
+        path: '/api/platform/rbac/revoke',
+        method: 'POST',
+        kind: 'permission:platform.roles.manage',
+        portal: 'platform',
+        isMutation: true
+    },
     'org.members.read': {
         path: '/api/org/members',
         method: 'GET',
