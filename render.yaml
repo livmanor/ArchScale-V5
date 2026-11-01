@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: archscale-backend
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install
+    startCommand: npm run server
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 10000
+      - key: ARCHSCALE_FRONTEND_URL
+        value: https://archscale-v5.vercel.app
+      - key: APP_BASE_URL_FRONTSTAGE
+        value: https://archscale-v5.vercel.app
+      - key: APP_BASE_URL_BACKSTAGE
+        value: https://archscale-v5.vercel.app
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: ARCHSCALE_RUNTIME_DB_URL
+        sync: false
+      - key: SUPABASE_DB_ADMIN_URL
+        sync: false

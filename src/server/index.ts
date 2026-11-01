@@ -59,6 +59,36 @@ export function createServer(
     // Body parsing middleware with size guard
     app.use(express.json({ limit: 100 * 1024 }));
 
+    // CORS middleware for cross-origin deployments (e.g. Vercel frontend -> Render backend)
+    app.use((req: Request, res: Response, next: NextFunction) => {
+        const origin = req.headers.origin;
+        const allowedOrigins = [
+            'https://archscale-v5.vercel.app',
+            process.env.ARCHSCALE_FRONTEND_URL,
+            process.env.APP_BASE_URL_FRONTSTAGE,
+            process.env.APP_BASE_URL_BACKSTAGE,
+            'http://localhost:5173',
+            'http://127.0.0.1:5173',
+            'http://localhost:3000',
+            'http://127.0.0.1:3000'
+        ].filter(Boolean) as string[];
+
+        if (origin && (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app'))) {
+            res.setHeader('Access-Control-Allow-Origin', origin);
+            res.setHeader('Access-Control-Allow-Credentials', 'true');
+        } else if (!origin) {
+            res.setHeader('Access-Control-Allow-Origin', '*');
+        }
+
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-archscale-context, x-request-id');
+
+        if (req.method === 'OPTIONS') {
+            return res.sendStatus(204);
+        }
+        next();
+    });
+
     // Global IP extraction helper
     const getClientIp = (req: Request): string => {
         return (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
@@ -1509,7 +1539,7 @@ const isMain = process.argv[1] && (
 
 if (isMain) {
     const port = parseInt(process.env.PORT || '3000', 10);
-    const host = '127.0.0.1';
+    const host = process.env.HOST || '0.0.0.0';
     const server = createServer();
     server.listen(port, host, () => {
         console.log(`[ArchScale Server (Express)] Listening on http://${host}:${port} (Demo mode: ${process.env.ARCHSCALE_DEMO === 'true'})`);
