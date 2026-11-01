@@ -5,15 +5,15 @@
   --color-surface-2: #fcfcfd;
   --color-surface-hover: #f9fafb;
   --color-surface-subtle: #f3f4f6;
-  
+
   --color-border: #eaecf0;
   --color-border-subtle: #f2f4f7;
   --color-border-focus: #f97316;
-  
+
   --color-text: #101828;
   --color-text-muted: #667085;
   --color-text-subtle: #98a2b3;
-  
+
   /* Primary Accent: Vibrant Warm Apricot / Orange */
   --color-accent: #f97316;
   --color-accent-hover: #ea580c;
@@ -21,16 +21,16 @@
   --color-accent-subtle: #ffedd5;
   --color-accent-border: #fdba74;
   --color-accent-text: #c2410c;
-  
+
   /* Status Badges - Bernaire Soft Pastel Pills */
   --color-success: #027a48;
   --color-success-bg: #ecfdf3;
   --color-success-border: #abefc6;
-  
+
   --color-warning: #b54708;
   --color-warning-bg: #fffaeb;
   --color-warning-border: #fedf89;
-  
+
   --color-error: #b42318;
   --color-error-bg: #fef3f2;
   --color-error-border: #fecdca;
@@ -38,7 +38,7 @@
   --color-info: #026aa2;
   --color-info-bg: #f0f9ff;
   --color-info-border: #b9e6fe;
-  
+
   /* Sidebar - Clean Light Modern Sidebar */
   --color-sidebar-bg: #ffffff;
   --color-sidebar-border: #eaecf0;
