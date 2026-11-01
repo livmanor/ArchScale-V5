@@ -32,6 +32,12 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
     const fragment = new URLSearchParams(window.location.hash.slice(1));
     return isInvitationPage ? fragment.get('access_token') : null;
   });
+  const [invitationPendingSession, setInvitationPendingSession] = useState<{
+    sessionData: any;
+    email: string;
+  } | null>(null);
+  const [invitePassword, setInvitePassword] = useState('');
+  const [inviteConfirmPassword, setInviteConfirmPassword] = useState('');
   const [resetToken] = useState(() => {
     const fragment = new URLSearchParams(window.location.hash.slice(1));
     return fragment.get('type') === 'recovery' ? fragment.get('access_token') : null;
@@ -50,9 +56,12 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
   const [password, setPassword] = useState('');
 
   const completeLogin = async (session: SessionData) => {
-    if (isInvitationPage || invitationToken) {
+    const pendingInvite = window.localStorage.getItem('archscale_pending_invite');
+    if (isInvitationPage || invitationToken || pendingInvite) {
+      window.localStorage.removeItem('archscale_pending_invite');
+      const tokenToUse = invitationToken || (pendingInvite && pendingInvite !== 'true' ? pendingInvite : undefined);
       setLoading(true);
-      const accepted = await acceptInvitation(invitationToken ?? undefined);
+      const accepted = await acceptInvitation(tokenToUse);
       setLoading(false);
       if (!accepted.ok) {
         setError(accepted.message);
@@ -104,11 +113,18 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
           return;
         }
         const fragment = new URLSearchParams(window.location.hash.slice(1));
-        finaliseSession({
+        const sessionPayload = {
           accessToken: invitationAuthToken,
           refreshToken: fragment.get('refresh_token') ?? undefined,
           principal: result.data.principal,
           mfaRequired: result.data.mfaRequired,
+        };
+        setToken(invitationAuthToken);
+        setRefreshToken(fragment.get('refresh_token') ?? null);
+        setNotice(null);
+        setInvitationPendingSession({
+          sessionData: sessionPayload,
+          email: result.data.principal.email,
         });
       } catch {
         if (!active) return;
@@ -163,11 +179,50 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
   const handleGoogleSignIn = async () => {
     setLoading(true);
     setError(null);
+    if (isInvitationPage || invitationToken) {
+      window.localStorage.setItem('archscale_pending_invite', invitationToken || 'true');
+    }
     const startError = await beginGoogleSignIn();
     if (startError) {
       setLoading(false);
       setError(startError);
     }
+  };
+
+  const handleAcceptWithPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!invitationPendingSession) return;
+    if (invitePassword.length < 12) {
+      setError('Password must be at least 12 characters.');
+      return;
+    }
+    if (invitePassword !== inviteConfirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    const accepted = await acceptInvitation(invitationToken ?? undefined, invitePassword);
+    setLoading(false);
+    if (!accepted.ok) {
+      setError(accepted.message);
+      return;
+    }
+    window.history.replaceState(null, '', '/');
+    finaliseSession(invitationPendingSession.sessionData);
+  };
+
+  const handleSkipPasswordAccept = async (sessionData: any) => {
+    setLoading(true);
+    setError(null);
+    const accepted = await acceptInvitation(invitationToken ?? undefined);
+    setLoading(false);
+    if (!accepted.ok) {
+      setError(accepted.message);
+      return;
+    }
+    window.history.replaceState(null, '', '/');
+    finaliseSession(sessionData);
   };
 
   const handleManualLogin = async (e: React.FormEvent) => {
@@ -294,10 +349,20 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
 
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 24px' }}>
         <h1 style={{ fontSize: 'var(--font-size-h1)', marginBottom: 24 }}>
-          {recoveryMode === 'request' ? 'Reset your password' : recoveryMode === 'reset' ? 'Choose a new password' : isInvitationPage || invitationToken ? 'Accept invitation' : 'Sign in'}
+          {recoveryMode === 'request'
+            ? 'Reset your password'
+            : recoveryMode === 'reset'
+            ? 'Choose a new password'
+            : invitationPendingSession
+            ? 'Accept invitation & Set password'
+            : isInvitationPage || invitationToken
+            ? 'Accept invitation'
+            : 'Sign in'}
         </h1>
 
-        {(isInvitationPage || invitationToken) && recoveryMode === 'login' && <Alert kind="info" style={{ marginBottom: 20 }}>Sign in to accept your invitation.</Alert>}
+        {!invitationPendingSession && (isInvitationPage || invitationToken) && recoveryMode === 'login' && (
+          <Alert kind="info" style={{ marginBottom: 20 }}>Sign in or continue with Google to accept your invitation.</Alert>
+        )}
 
         {notice && <Alert kind="info" style={{ marginBottom: 20 }}>{notice}</Alert>}
         {error && <Alert kind="error" style={{ marginBottom: 20 }}>{error}</Alert>}
@@ -333,7 +398,69 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
           </div>
         )}
 
-        {!loading && recoveryMode === 'login' && (
+        {!loading && invitationPendingSession && (
+          <div style={{ maxWidth: 440 }}>
+            <div style={{ marginBottom: 20 }}>
+              <p style={{ color: 'var(--color-text-muted)', fontSize: 'var(--font-size-sm)', margin: '0 0 10px 0' }}>
+                You have been invited to join your organisation. Set your account password to activate your login.
+              </p>
+              <div style={{ padding: '10px 14px', background: 'var(--color-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', fontSize: 'var(--font-size-sm)', fontWeight: 500, color: 'var(--color-text)' }}>
+                {invitationPendingSession.email}
+              </div>
+            </div>
+            <form onSubmit={handleAcceptWithPassword}>
+              <FormField label="New Password" required hint="Must be at least 12 characters.">
+                <TextInput
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={12}
+                  placeholder="Enter new password"
+                  value={invitePassword}
+                  onChange={e => { setInvitePassword(e.target.value); setError(null); }}
+                  required
+                  autoFocus
+                />
+              </FormField>
+              <FormField label="Confirm Password" required>
+                <TextInput
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={12}
+                  placeholder="Re-enter password"
+                  value={inviteConfirmPassword}
+                  onChange={e => { setInviteConfirmPassword(e.target.value); setError(null); }}
+                  required
+                />
+              </FormField>
+              <Button type="submit" loading={loading} style={{ width: '100%', marginBottom: 16 }}>
+                Set Password & Accept Invitation
+              </Button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '14px 0', color: 'var(--color-text-muted)', fontSize: 'var(--font-size-xs)' }}>
+                <div style={{ flex: 1, height: 1, background: 'var(--color-border)' }} />
+                <span>OR</span>
+                <div style={{ flex: 1, height: 1, background: 'var(--color-border)' }} />
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleGoogleSignIn}
+                disabled={!googleOAuthConfigured}
+                style={{ width: '100%', marginBottom: 12 }}
+              >
+                Continue with Google
+              </Button>
+              <button
+                type="button"
+                onClick={() => handleSkipPasswordAccept(invitationPendingSession.sessionData)}
+                style={{ display: 'block', width: '100%', marginTop: 8, background: 'none', border: 'none', color: 'var(--color-text-muted)', fontSize: 'var(--font-size-sm)', cursor: 'pointer', textAlign: 'center' }}
+              >
+                Skip password & enter workspace →
+              </button>
+            </form>
+          </div>
+        )}
+
+        {!loading && !invitationPendingSession && recoveryMode === 'login' && (
           <div style={{ maxWidth: 420 }}>
             <Button
               type="button"

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import './styles/global.css';
 
-import { setToken, setRefreshToken, setContextId, logout } from './api/client';
+import { setToken, setRefreshToken, setContextId, logout, acceptInvitation } from './api/client';
 import { clearBrowserAuthSession } from './api/supabaseAuth';
 import { SessionContext, SessionData, ContextData } from './hooks/useSession';
 import { useToast } from './hooks/useToast';
@@ -27,6 +27,21 @@ export const App: React.FC = () => {
   const [activeNav, setActiveNav] = useState('tasks');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [pickingContext, setPickingContext] = useState(false);
+
+  useEffect(() => {
+    if (!session) return;
+    if (window.location.pathname === '/accept') {
+      const searchToken = new URLSearchParams(window.location.search).get('token') ?? undefined;
+      void (async () => {
+        const result = await acceptInvitation(searchToken);
+        if (result.ok) {
+          addToast({ kind: 'success', message: 'Invitation accepted! Select your organisation to continue.' });
+          setPickingContext(true);
+        }
+        window.history.replaceState(null, '', '/');
+      })();
+    }
+  }, [session]);
 
   useEffect(() => {
     const handleUnauthorized = () => {
