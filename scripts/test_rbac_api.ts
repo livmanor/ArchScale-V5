@@ -22,8 +22,8 @@ async function main() {
   // If MFA required, verify MFA
   if (signInData.mfaRequired) {
     console.log('MFA required, elevating...');
-    const { generateTotp } = await import('../src/utils/totp.js');
-    const totp = generateTotp(founder.totpSecret);
+    const { generateTotpCode } = await import('../src/utils/totp.js');
+    const totp = generateTotpCode(founder.totpSecret);
     const mfaRes = await fetch('http://127.0.0.1:3000/api/session/mfa/verify', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
