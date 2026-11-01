@@ -138,3 +138,4 @@ The frontend is built and served via [vercel.json](vercel.json):
 
 ## 📄 License
 UNLICENSED &copy; 2026 ArchScale Platform Team. All rights reserved.
+
