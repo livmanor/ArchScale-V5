@@ -9,7 +9,8 @@ ArchScale V5 is a multi-tenant, organisation-first identity, authorization, and 
 - 🖥️ **Production Frontend (Vercel):** [https://archscale-v5.vercel.app](https://archscale-v5.vercel.app)
 - ⚙️ **Production Backend API (Render):** [https://archscale-v5.onrender.com](https://archscale-v5.onrender.com)
 - 🐙 **Source Code (GitHub):** [https://github.com/livmanor/ArchScale-V5](https://github.com/livmanor/ArchScale-V5)
-- ⚡ **Supabase Project:** [https://avntrnedrhysiqdkmdwc.supabase.co](https://avntrnedrhysiqdkmdwc.supabase.co)
+- ⚡ **Supabase Management Dashboard:** [https://supabase.com/dashboard/project/avntrnedrhysiqdkmdwc](https://supabase.com/dashboard/project/avntrnedrhysiqdkmdwc)
+- 🔌 **Supabase API Gateway (Backend URL):** `https://avntrnedrhysiqdkmdwc.supabase.co`
 - 📖 **Render Deployment Guide:** [docs/RENDER_DEPLOYMENT.md](docs/RENDER_DEPLOYMENT.md)
 
 ---
