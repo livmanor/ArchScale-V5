@@ -37,7 +37,7 @@ export interface AppConfig {
 
 export function validateConfig(): AppConfig {
     const nodeEnv = process.env.NODE_ENV || 'development';
-    const env = (process.env.ARCHSCALE_ENV || '').toLowerCase() as AppConfig['env'];
+    const env = (process.env.ARCHSCALE_ENV || (nodeEnv === 'production' ? 'production' : '')).toLowerCase() as AppConfig['env'];
     const allowLocalAuth = process.env.ALLOW_LOCAL_AUTH === 'true';
 
     const localTest = nodeEnv === 'test' && allowLocalAuth;
@@ -65,6 +65,19 @@ export function validateConfig(): AppConfig {
         assertLoopback(runtimeUrl, 'ARCHSCALE_RUNTIME_DB_URL', ['postgres:','postgresql:']);
         for (const name of ['SUPABASE_ANON_KEY','SUPABASE_SERVICE_ROLE_KEY']) {
             if (!process.env[name]) throw new Error(`ABORTED: ${name} is required for local Supabase development.`);
+        }
+    }
+
+    if (env === 'production') {
+        const missing: string[] = [];
+        if (!process.env.SUPABASE_URL) missing.push('SUPABASE_URL');
+        if (!process.env.SUPABASE_ANON_KEY) missing.push('SUPABASE_ANON_KEY');
+        if (!process.env.SUPABASE_SERVICE_ROLE_KEY) missing.push('SUPABASE_SERVICE_ROLE_KEY');
+        if (!process.env.SUPABASE_DB_ADMIN_URL) missing.push('SUPABASE_DB_ADMIN_URL');
+        if (!process.env.ARCHSCALE_RUNTIME_DB_URL) missing.push('ARCHSCALE_RUNTIME_DB_URL');
+
+        if (missing.length > 0) {
+            throw new Error(`ABORTED: Missing required environment variables: ${missing.join(', ')}`);
         }
     }
 

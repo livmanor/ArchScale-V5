@@ -27,6 +27,7 @@ In the **Environment Variables** section of your new Render Web Service, add the
 | Variable | Value | Purpose |
 |----------|-------|---------|
 | `NODE_ENV` | `production` | Production mode |
+| `ARCHSCALE_ENV` | `production` | Production environment profile |
 | `HOST` | `0.0.0.0` | Required for Render container networking |
 | `PORT` | `10000` | Render standard internal port |
 | `ARCHSCALE_FRONTEND_URL` | `https://archscale-v5.vercel.app` | Vercel production frontend origin |
