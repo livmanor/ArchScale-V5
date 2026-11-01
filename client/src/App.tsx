@@ -169,6 +169,8 @@ export const App: React.FC = () => {
           subtitle={isBackstage ? 'Backstage' : (context?.jobRole ?? personaDept)}
           collapsed={sidebarCollapsed}
           onCollapse={() => setSidebarCollapsed(c => !c)}
+          userEmail={session.principal.email}
+          userName={context?.jobRole}
         />
         <div className="app-content">
           <TopBar

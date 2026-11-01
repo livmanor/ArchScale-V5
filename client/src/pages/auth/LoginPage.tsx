@@ -337,43 +337,65 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
 
   // ── Main login ────────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--color-bg)', overflowY: 'auto' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--color-bg)', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <div style={{ background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)', padding: '16px 32px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={LOGO_MARK}>AS</div>
+      <div style={{ background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)', padding: '12px 28px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ ...LOGO_MARK, marginBottom: 0, width: 34, height: 34, borderRadius: 8, fontSize: 13 }}>AS</div>
         <div>
-          <div style={{ fontSize: 'var(--font-size-h2)', fontWeight: 700, color: 'var(--color-text)' }}>ArchScale</div>
-          <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>Organisation Authentication Platform</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-text)' }}>ArchScale</div>
+          <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Organisation Authentication Platform</div>
         </div>
       </div>
 
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 24px' }}>
-        <h1 style={{ fontSize: 'var(--font-size-h1)', marginBottom: 24 }}>
-          {recoveryMode === 'request'
-            ? 'Reset your password'
-            : recoveryMode === 'reset'
-            ? 'Choose a new password'
-            : invitationPendingSession
-            ? 'Accept invitation & Set password'
-            : isInvitationPage || invitationToken
-            ? 'Accept invitation'
-            : 'Sign in'}
-        </h1>
-
-        {!invitationPendingSession && (isInvitationPage || invitationToken) && recoveryMode === 'login' && (
-          <Alert kind="info" style={{ marginBottom: 20 }}>Sign in or continue with Google to accept your invitation.</Alert>
-        )}
-
-        {notice && <Alert kind="info" style={{ marginBottom: 20 }}>{notice}</Alert>}
-        {error && <Alert kind="error" style={{ marginBottom: 20 }}>{error}</Alert>}
-
-        {/* Loading overlay */}
-        {loading && (
-          <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-            <Spinner size={16} />
-            <span>Signing in…</span>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 20px', overflowY: 'auto' }}>
+        <div style={{
+          background: 'var(--color-surface)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-xl)',
+          padding: '36px 32px',
+          width: '100%',
+          maxWidth: 460,
+          boxShadow: 'var(--shadow-md)',
+        }}>
+          <div style={{ marginBottom: 22 }}>
+            <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--color-text)', margin: '0 0 6px 0' }}>
+              {recoveryMode === 'request'
+                ? 'Reset your password'
+                : recoveryMode === 'reset'
+                ? 'Choose a new password'
+                : invitationPendingSession
+                ? 'Accept invitation & Set password'
+                : isInvitationPage || invitationToken
+                ? 'Accept invitation'
+                : 'Sign in to your account'}
+            </h1>
+            <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: 0, lineHeight: 1.4 }}>
+              {recoveryMode === 'request'
+                ? 'Enter your email to receive a recovery link'
+                : recoveryMode === 'reset'
+                ? 'Choose a secure password for your account'
+                : invitationPendingSession
+                ? 'Set your password to activate your access'
+                : isInvitationPage || invitationToken
+                ? 'Sign in or continue with Google to join your organisation'
+                : 'Enter your credentials or use Google sign-in'}
+            </p>
           </div>
-        )}
+
+          {!invitationPendingSession && (isInvitationPage || invitationToken) && recoveryMode === 'login' && (
+            <Alert kind="info" style={{ marginBottom: 20 }}>Sign in or continue with Google to accept your invitation.</Alert>
+          )}
+
+          {notice && <Alert kind="info" style={{ marginBottom: 20 }}>{notice}</Alert>}
+          {error && <Alert kind="error" style={{ marginBottom: 20 }}>{error}</Alert>}
+
+          {/* Loading overlay */}
+          {loading && (
+            <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+              <Spinner size={16} />
+              <span>Please wait…</span>
+            </div>
+          )}
 
         {!loading && recoveryMode === 'request' && (
           <div style={{ maxWidth: 420 }}>
@@ -505,6 +527,7 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
             </form>
           </div>
         )}
+        </div>
       </div>
     </div>
   );
@@ -531,16 +554,17 @@ const CARD: React.CSSProperties = {
 };
 
 const LOGO_MARK: React.CSSProperties = {
-  width: 40,
-  height: 40,
-  borderRadius: 10,
-  background: 'var(--color-accent)',
-  color: '#fff',
+  width: 44,
+  height: 44,
+  borderRadius: 12,
+  background: 'linear-gradient(135deg, #fb923c, #f97316)',
+  color: '#ffffff',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  fontSize: 14,
-  fontWeight: 700,
+  fontSize: 15,
+  fontWeight: 800,
+  boxShadow: '0 4px 12px rgba(249, 115, 22, 0.25)',
   marginBottom: 20,
 };
 

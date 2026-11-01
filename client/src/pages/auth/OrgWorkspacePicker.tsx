@@ -225,9 +225,9 @@ const SHELL: React.CSSProperties = {
 const CARD: React.CSSProperties = {
   background: 'var(--color-surface)',
   border: '1px solid var(--color-border)',
-  borderRadius: 'var(--radius-lg)',
-  padding: 32,
+  borderRadius: 'var(--radius-xl)',
+  padding: '36px 32px',
   width: '100%',
-  boxShadow: 'var(--shadow-sm)',
+  boxShadow: 'var(--shadow-md)',
 };
 
