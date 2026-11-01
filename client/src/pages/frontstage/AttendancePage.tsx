@@ -58,7 +58,7 @@ export const AttendancePage: React.FC = () => {
       load();
     } else {
       setLoading(false);
-      setError('Section 11 Attendance Policy: Access Denied. Attendance records are strictly restricted to the HR department and audited Super Admins.');
+      setError('Access denied. Tenant-wide attendance is restricted to HR and audited support; members can access only their own current-day attendance.');
     }
   }, [load, isAuthorized]);
 

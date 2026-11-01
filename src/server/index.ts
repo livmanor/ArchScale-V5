@@ -1242,7 +1242,7 @@ export function createServer(
         } catch (err:any) { return res.status(403).json({ error:'TASK_APPROVAL_DENIED', message:err.message }); }
     });
 
-    // --- TEST APPLICATION B: ATTENDANCE (RESTRICTED ACCESS) ---
+    // --- TEST APPLICATION B: ATTENDANCE (HR RECORDS + MEMBER SELF-SERVICE) ---
     app.post('/api/attendance/check-in', authenticate, requireContext, async (req: Request, res: Response) => {
         const client = (req as any).dbClient as PoolClient;
         const contextId: string = (req as any).contextId;
