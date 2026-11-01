@@ -1,0 +1,11 @@
+{
+  "buildCommand": "npm run build:ui",
+  "outputDirectory": "src/server/public",
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
