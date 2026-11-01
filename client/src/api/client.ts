@@ -43,8 +43,8 @@ export const recovery = (email: string) =>
 export const resetPassword = (token: string, newPassword: string) =>
   api('/api/session/reset-password', 'POST', { token, newPassword });
 
-export const acceptInvitation = (token?: string) =>
-  api('/api/invitations/accept', 'POST', token ? { token } : {});
+export const acceptInvitation = (token?: string, password?: string) =>
+  api('/api/invitations/accept', 'POST', { ...(token ? { token } : {}), ...(password ? { password } : {}) });
 
 export const logout = (contextId?: string) =>
   api('/api/session/logout', 'POST', { contextId });
