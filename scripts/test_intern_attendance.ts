@@ -1,64 +1,63 @@
-import axios from 'axios';
 import fs from 'fs';
 
-async function testApi() {
+async function testIntern() {
   const users = JSON.parse(fs.readFileSync('.local/test-users.json', 'utf8'));
   const intern = users.intern;
-  console.log('Logging in as intern:', intern.email);
+  console.log('Testing with intern email:', intern.email);
 
-  try {
-    const loginRes = await axios.post('http://127.0.0.1:3000/api/session/sign-in', {
-      identifier: intern.email,
-      password: intern.password,
-    });
-    console.log('Login success! Status:', loginRes.status);
-    const { token, availableContexts } = loginRes.data;
-    console.log('Available Contexts for intern:', availableContexts);
-
-    if (!availableContexts || availableContexts.length === 0) {
-      console.log('No contexts for intern!');
-      return;
-    }
-
-    const ctx = availableContexts[0];
-    const ctxRes = await axios.post('http://127.0.0.1:3000/api/session/context', {
-      membershipId: ctx.membershipId,
-      workspaceId: ctx.workspaceId,
-    }, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    const activeContextId = ctxRes.data.contextId;
-    console.log('Created active contextId:', activeContextId);
-
-    // Try GET /api/attendance
-    try {
-      const getRes = await axios.get('http://127.0.0.1:3000/api/attendance', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'x-archscale-context': activeContextId,
-        },
-      });
-      console.log('GET /api/attendance success! Records count:', getRes.data.records.length);
-    } catch (err: any) {
-      console.error('GET /api/attendance error:', err.response?.status, err.response?.data || err.message);
-    }
-
-    // Try POST /api/attendance/check-in
-    try {
-      const checkInRes = await axios.post('http://127.0.0.1:3000/api/attendance/check-in', {}, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'x-archscale-context': activeContextId,
-        },
-      });
-      console.log('POST /api/attendance/check-in success!', checkInRes.data);
-    } catch (err: any) {
-      console.error('POST /api/attendance/check-in error:', err.response?.status, err.response?.data || err.message);
-    }
-
-  } catch (err: any) {
-    console.error('Login error:', err.response?.status, err.response?.data || err.message);
+  const signInRes = await fetch('http://127.0.0.1:3000/api/session/sign-in', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: intern.email.toLowerCase(), password: intern.password }),
+  });
+  const signInData = await signInRes.json();
+  if (!signInRes.ok) {
+    console.error('Sign in failed:', signInData);
+    process.exit(1);
   }
+  const token = signInData.accessToken;
+  console.log('Sign in success! Token received.');
+
+  // Create context for intern
+  const ctxRes = await fetch('http://127.0.0.1:3000/api/session/context', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      organisationId: intern.orgId,
+      workspaceId: intern.workspaceId,
+    }),
+  });
+  const ctxData = await ctxRes.json();
+  console.log('Context response:', ctxData);
+  const contextId = ctxData.context?.contextId || ctxData.context?.id || ctxData.contextId || ctxData.id;
+  console.log('Context ID:', contextId);
+
+  // Try GET /api/attendance
+  console.log('\n--- Testing GET /api/attendance ---');
+  const getRes = await fetch('http://127.0.0.1:3000/api/attendance', {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'x-archscale-context': contextId,
+    },
+  });
+  console.log('GET /api/attendance status:', getRes.status);
+  const getData = await getRes.json();
+  console.log('GET /api/attendance data:', getData);
+
+  // Try POST /api/attendance/check-in
+  console.log('\n--- Testing POST /api/attendance/check-in ---');
+  const checkInRes = await fetch('http://127.0.0.1:3000/api/attendance/check-in', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'x-archscale-context': contextId,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({}),
+  });
+  console.log('POST /api/attendance/check-in status:', checkInRes.status);
+  const checkInData = await checkInRes.json();
+  console.log('POST /api/attendance/check-in data:', checkInData);
 }
 
-testApi();
+testIntern().catch(console.error);
