@@ -1404,7 +1404,7 @@ export function createServer(
             const result = await client.query(`INSERT INTO public.attendance_records
                 (membership_id, department, attendance_date, check_in, status, remarks,
                  created_by_membership_id, last_updated_by_membership_id)
-                SELECT ac.membership_id, m.department, CURRENT_DATE, LOCALTIME(0), 'Present', '',
+                SELECT ac.membership_id, COALESCE(m.department, 'General'), CURRENT_DATE, LOCALTIME(0), 'Present', '',
                        ac.membership_id, ac.membership_id
                   FROM public.access_contexts ac
                   JOIN public.memberships m ON m.id = ac.membership_id

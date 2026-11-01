@@ -81,6 +81,9 @@ function createRuntimePool(): pg.Pool {
 // Runtime pool connects strictly as archscale_app_runtime
 // No superuser, no SET ROLE, no owner credentials.
 export const runtimePool = createRuntimePool();
+runtimePool.on('error', (err) => {
+    console.warn('[db:runtimePool] idle client error:', err.message);
+});
 
 /**
  * Executes an application database operation within a single isolated transaction.

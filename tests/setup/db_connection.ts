@@ -113,7 +113,10 @@ export async function createIsolatedTestDatabase(testDbName: string): Promise<pg
         '016_tasks_attendance_modules.sql',
         '017_platform_workflows.sql',
         '018_recovery_context_revocation.sql',
-        '019_attendance_self_service.sql'
+        '019_attendance_self_service.sql',
+        '020_platform_tenant_admin_approval_scope.sql',
+        '021_platform_rbac_management_functions.sql',
+        '022_attendance_schema_and_self_service.sql'
     ];
 
     for (const file of migrationFiles) {
