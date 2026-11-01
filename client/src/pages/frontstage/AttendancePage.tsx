@@ -170,11 +170,11 @@ export const AttendancePage: React.FC = () => {
             Today{today ? ` · ${new Date(`${today}T00:00:00`).toLocaleDateString()}` : ''}
           </div>
           {!todayRecord ? (
-            <Button onClick={handleCheckIn} loading={clocking}>Check In</Button>
+            <Button onClick={handleCheckIn} loading={clocking} disabled={loading || !!error}>Check In</Button>
           ) : todayRecord.checkInTime && !todayRecord.checkOutTime ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
               <span>Checked in at <strong>{todayRecord.checkInTime}</strong></span>
-              <Button variant="secondary" onClick={handleCheckOut} loading={clocking}>Check Out</Button>
+              <Button variant="secondary" onClick={handleCheckOut} loading={clocking} disabled={loading || !!error}>Check Out</Button>
             </div>
           ) : todayRecord.checkOutTime ? (
             <span>Attendance completed — {todayRecord.checkInTime} to {todayRecord.checkOutTime}</span>

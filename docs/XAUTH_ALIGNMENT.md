@@ -246,8 +246,8 @@ ALTER TABLE invitations
    Upon successful dispatch, status transitions to `SENT`.
 3. **Resend**: Generates a new raw token, updates `token_hash`, extends `expires_at`, triggers email redispatch, and remains `SENT`.
 4. **Acceptance (`ACCEPTED`)**:
-   - Invitee clicks link in email, arrives at Frontstage `/accept-invite?token=...`.
-   - Backend verifies token hash, verifies `expires_at > now()`, confirms user in Supabase Auth.
+   - Invitee clicks the Supabase Auth email link and returns to Frontstage `/accept?token=...` with the verified Supabase invite session in the URL fragment.
+   - Frontstage verifies the session with the backend; the backend verifies the invitation token hash and expiry before provisioning membership.
    - Syncs `public.users` via `fn_upsert_user_mirror`.
    - Provisions `memberships` row with role, profile, department, and reporting manager.
    - Updates invitation status to `ACCEPTED` with `used_at = now()`.
@@ -274,7 +274,7 @@ In Phase 3, build a lightweight React + Vite + TypeScript frontend inside `packa
 - **Components**: Shared compact table, drawer pattern, status badge.
 - **Screens**:
   1. Login & MFA Verify screen (handling 6-digit TOTP challenge).
-  2. Invitation Acceptance screen (`/accept-invite?token=...` with password set).
+  2. Invitation acceptance through the verified Supabase invite session and app token (`/accept?token=...`).
   3. Workspace & Context Switcher.
 
 ---

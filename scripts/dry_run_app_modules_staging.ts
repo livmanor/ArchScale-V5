@@ -32,6 +32,7 @@ async function main() {
         ['migration', '016_tasks_attendance_modules.sql'],
         ['migration', '017_platform_workflows.sql'],
         ['migration', '018_recovery_context_revocation.sql'],
+        ['migration', '019_attendance_self_service.sql'],
         ['seed', '003_app_module_permissions.sql']
     ] as const;
     const client = new pg.Client({ connectionString: adminUrl, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 15000 });
@@ -60,7 +61,8 @@ async function main() {
             'fn_app_record_allowed', 'fn_app_support_context_can_read', 'fn_app_member_label',
             'fn_platform_invite_tenant_admin_with_hash', 'fn_platform_list_organisations',
             'fn_platform_get_organisation', 'fn_list_platform_support_grants',
-            'fn_revoke_user_access_contexts'
+            'fn_revoke_user_access_contexts', 'fn_attendance_self_access',
+            'fn_attendance_self_update_guard'
         ]]);
         const seedState = await client.query(`
             SELECT
@@ -70,7 +72,7 @@ async function main() {
         `);
         const results = { requiredFunctions: functions.rows[0].count, ...seedState.rows[0] };
         console.log('Transactional checks:', JSON.stringify(results));
-        if (results.requiredFunctions !== 8 || results.apps !== 2 || results.policies < 1 || results.app_permissions < 1) {
+        if (results.requiredFunctions !== 10 || results.apps !== 2 || results.policies < 1 || results.app_permissions < 1) {
             throw new Error('Post-apply schema or seed assertions failed.');
         }
         await client.query('ROLLBACK');
