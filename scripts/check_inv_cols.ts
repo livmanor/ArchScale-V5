@@ -1,8 +1,8 @@
 import fs from 'fs';
 import pg from 'pg';
 
-let adminUrl = process.env.SUPABASE_DB_ADMIN_URL;
-if (!adminUrl && fs.existsSync('.env')) {
+let adminUrl = '';
+if (fs.existsSync('.env')) {
   for (const line of fs.readFileSync('.env', 'utf8').split(/\r?\n/)) {
     if (line.startsWith('SUPABASE_DB_ADMIN_URL=')) {
       adminUrl = line.split('=')[1].trim();
@@ -11,6 +11,7 @@ if (!adminUrl && fs.existsSync('.env')) {
 }
 
 async function main() {
+  console.log('Connecting to:', new URL(adminUrl).host, 'user:', new URL(adminUrl).username);
   const client = new pg.Client({ connectionString: adminUrl, ssl: { rejectUnauthorized: false } });
   await client.connect();
   const cols = await client.query(`
@@ -19,8 +20,8 @@ async function main() {
     WHERE table_schema = 'public' AND table_name = 'invitations'
     ORDER BY ordinal_position;
   `);
-  console.log('Columns in public.invitations:');
-  console.table(cols.rows);
+  console.log('Total columns in public.invitations:', cols.rows.length);
+  console.log('Columns:', cols.rows.map(r => r.column_name));
   await client.end();
 }
 
