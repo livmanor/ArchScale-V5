@@ -10,13 +10,16 @@ import { AddressInfo } from 'net';
 import pg from 'pg';
 import crypto from 'crypto';
 import { createServer } from '../../src/server/index.js';
-import { createIsolatedTestDatabase } from '../setup/db_connection.js';
+import { createIsolatedTestDatabase, RUNTIME_CONFIG } from '../setup/db_connection.js';
 import { LocalProvider } from '../../src/identity/providers/local.js';
 import { getSentMails, clearSentMails } from '../../src/mail/sink.js';
 
 let server: http.Server;
 let baseUrl: string;
+let attendanceServer: http.Server;
+let attendanceBaseUrl: string;
 let adminPool: pg.Pool;
+let runtimeAppPool: pg.Pool;
 let localIdp: LocalProvider;
 
 const USER_OWNER_ID   = '60000000-0000-0000-0000-000000000001';
@@ -34,6 +37,7 @@ let leaderContextId: string;
 let leaderToken: string;
 let managerContextId: string;
 let managerToken: string;
+let otherContextId: string;
 let internContextId: string;
 let internToken: string;
 let inviteeToken: string;
@@ -48,6 +52,7 @@ beforeAll(async () => {
     delete process.env.SUPABASE_DB_ADMIN_URL;
 
     adminPool = await createIsolatedTestDatabase('archscale_test_invitations');
+    runtimeAppPool = new pg.Pool({ ...RUNTIME_CONFIG, database: 'archscale_test_invitations' });
     localIdp = new LocalProvider();
 
     // Register local users in localIdp
@@ -105,6 +110,10 @@ beforeAll(async () => {
         INSERT INTO public.memberships (user_id, organisation_id, role_key, status, expires_at)
         VALUES ($1, $2, 'intern', 'ACTIVE', now() + interval '30 days');
     `, [USER_INTERN_ID, ORG_ID]);
+    await adminPool.query(`
+        INSERT INTO public.memberships (user_id, organisation_id, role_key, status, department, job_role, expires_at)
+        VALUES ($1, $2, 'intern', 'ACTIVE', 'Accounts', 'Junior Accountant', now() + interval '30 days');
+    `, [USER_OTHER_ID, ORG_ID]);
 
     // Sign in and create contexts
     const ownerLogin = await localIdp.signIn({ email: 'owner@inv.local', password: 'test-password' });
@@ -140,6 +149,10 @@ beforeAll(async () => {
 
     const otherLogin = await localIdp.signIn({ email: 'other@inv.local', password: 'test-password' });
     otherToken = otherLogin.accessToken;
+    const otherCtxRes = await adminPool.query(`
+        SELECT fn_create_access_context($1::uuid, $2, $3::uuid, $4::uuid, 'aal1');
+    `, [USER_OTHER_ID, otherLogin.principal.sessionId, ORG_ID, workspaceId]);
+    otherContextId = otherCtxRes.rows[0].fn_create_access_context;
 
     // Start server
     server = createServer(localIdp, adminPool);
@@ -150,10 +163,21 @@ beforeAll(async () => {
             resolve();
         });
     });
+
+    attendanceServer = createServer(localIdp, runtimeAppPool);
+    await new Promise<void>((resolve) => {
+        attendanceServer.listen(0, '127.0.0.1', () => {
+            const addr = attendanceServer.address() as AddressInfo;
+            attendanceBaseUrl = `http://127.0.0.1:${addr.port}`;
+            resolve();
+        });
+    });
 });
 
 afterAll(async () => {
     if (server) await new Promise<void>((res) => server.close(() => res()));
+    if (attendanceServer) await new Promise<void>((res) => attendanceServer.close(() => res()));
+    if (runtimeAppPool) await runtimeAppPool.end();
     if (adminPool) await adminPool.end();
 });
 
@@ -732,27 +756,43 @@ describe('Invitations Engine API Integration Tests', () => {
             'X-ArchScale-Context': managerContextId,
             'Content-Type': 'application/json'
         };
-        const checkIn = await fetch(`${baseUrl}/api/attendance/check-in`, { method: 'POST', headers });
+        const checkIn = await fetch(`${attendanceBaseUrl}/api/attendance/check-in`, { method: 'POST', headers });
         expect(checkIn.status).toBe(201);
         const checkedIn = await checkIn.json();
         expect(checkedIn.record.membership_id).toBe(mgrMembershipId);
         expect(checkedIn.record.check_in).toBeDefined();
         expect(checkedIn.record.check_out).toBeNull();
 
-        const duplicate = await fetch(`${baseUrl}/api/attendance/check-in`, { method: 'POST', headers });
+        const duplicate = await fetch(`${attendanceBaseUrl}/api/attendance/check-in`, { method: 'POST', headers });
         expect(duplicate.status).toBe(409);
 
-        const edit = await fetch(`${baseUrl}/api/attendance/${checkedIn.record.id}`, {
+        const edit = await fetch(`${attendanceBaseUrl}/api/attendance/${checkedIn.record.id}`, {
             method: 'PATCH',
             headers,
             body: JSON.stringify({ status: 'Absent' })
         });
         expect(edit.status).toBe(403);
 
-        const checkOut = await fetch(`${baseUrl}/api/attendance/check-out`, { method: 'POST', headers });
+        const checkOut = await fetch(`${attendanceBaseUrl}/api/attendance/check-out`, { method: 'POST', headers });
         expect(checkOut.status).toBe(200);
         const checkedOut = await checkOut.json();
         expect(checkedOut.record.check_out).toBeDefined();
         expect(checkedOut.record.membership_id).toBe(mgrMembershipId);
+
+        const otherHeaders = {
+            'Authorization': `Bearer ${otherToken}`,
+            'X-ArchScale-Context': otherContextId
+        };
+        const otherCheckIn = await fetch(`${attendanceBaseUrl}/api/attendance/check-in`, {
+            method: 'POST',
+            headers: otherHeaders
+        });
+        expect(otherCheckIn.status).toBe(201);
+
+        const ownRecords = await fetch(`${attendanceBaseUrl}/api/attendance`, { headers });
+        expect(ownRecords.status).toBe(200);
+        const visibleRecords = await ownRecords.json();
+        expect(visibleRecords.records).toHaveLength(1);
+        expect(visibleRecords.records[0].memberId).toBe(mgrMembershipId);
     });
 });
