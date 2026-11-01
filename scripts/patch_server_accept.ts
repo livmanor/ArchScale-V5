@@ -101,3 +101,4 @@ if (isCrlf) {
 fs.writeFileSync(filePath, patched, 'utf8');
 console.log('Successfully patched src/server/index.ts');
 process.exit(0);
+
