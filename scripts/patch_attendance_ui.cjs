@@ -65,3 +65,4 @@ code = code.replaceAll('hint={!isHRManager ?', 'hint={!canManageAttendance ?');
 
 fs.writeFileSync('client/src/pages/frontstage/AttendancePage.tsx', code, 'utf8');
 console.log('AttendancePage.tsx updated successfully');
+

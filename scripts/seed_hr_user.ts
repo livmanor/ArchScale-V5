@@ -109,3 +109,4 @@ main().catch(err => {
   console.error('Error seeding HR user:', err);
   process.exit(1);
 });
+
