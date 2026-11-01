@@ -3,6 +3,9 @@ import {
   signIn, signInByCode, verifyMfa, recovery, resetPassword, acceptInvitation, completeOAuthSession,
   setToken, setRefreshToken, setContextId,
 } from '../../api/client';
+import {
+  beginGoogleSignIn, getOAuthCallbackSession, googleOAuthConfigured,
+} from '../../api/supabaseAuth';
 import type { SessionData } from '../../hooks/useSession';
 import { Button } from '../../components/Button';
 import { Alert } from '../../components/Alert';
@@ -20,6 +23,7 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
   const [recoveryEmail, setRecoveryEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [isInvitationPage] = useState(() => window.location.pathname === '/accept');
+  const [isOAuthCallback] = useState(() => window.location.pathname === '/auth/callback');
   const [invitationToken] = useState(() =>
     new URLSearchParams(window.location.search).get('token') ??
     new URLSearchParams(window.location.hash.slice(1)).get('token')
@@ -115,6 +119,56 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
     })();
     return () => { active = false; };
   }, [invitationAuthToken]);
+
+  React.useEffect(() => {
+    if (!isOAuthCallback) return;
+    let active = true;
+    setLoading(true);
+    setNotice('Completing Google sign-in…');
+    void (async () => {
+      try {
+        const callbackError = new URLSearchParams(window.location.search).get('error_description');
+        if (callbackError) throw new Error(callbackError);
+
+        const { session: oauthSession, error: sessionError } = await getOAuthCallbackSession();
+        if (sessionError) throw new Error(sessionError);
+        if (!oauthSession) throw new Error('Google sign-in did not return an authenticated session.');
+
+        const result = await completeOAuthSession(oauthSession.access_token);
+        if (!active) return;
+        if (!result.ok || !result.data?.principal) {
+          throw new Error(result.message || 'The Google session could not be verified.');
+        }
+
+        window.history.replaceState(null, '', '/');
+        finaliseSession({
+          accessToken: oauthSession.access_token,
+          refreshToken: oauthSession.refresh_token,
+          principal: result.data.principal,
+          mfaRequired: result.data.mfaRequired,
+        });
+      } catch (callbackError) {
+        if (!active) return;
+        setLoading(false);
+        setNotice(null);
+        setError(callbackError instanceof Error
+          ? callbackError.message
+          : 'Google sign-in could not be completed. Please try again.');
+        window.history.replaceState(null, '', '/');
+      }
+    })();
+    return () => { active = false; };
+  }, [isOAuthCallback]);
+
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    setError(null);
+    const startError = await beginGoogleSignIn();
+    if (startError) {
+      setLoading(false);
+      setError(startError);
+    }
+  };
 
   const handleManualLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -281,6 +335,20 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
 
         {!loading && recoveryMode === 'login' && (
           <div style={{ maxWidth: 420 }}>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleGoogleSignIn}
+              disabled={!googleOAuthConfigured}
+              style={{ width: '100%', marginBottom: 16 }}
+            >
+              Continue with Google
+            </Button>
+            {!googleOAuthConfigured && (
+              <p style={{ margin: '-8px 0 16px', fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
+                Google sign-in needs the Supabase project URL and anon key in the frontend build.
+              </p>
+            )}
             <form onSubmit={handleManualLogin}>
               <FormField label="Email or User Code" required>
                 <TextInput

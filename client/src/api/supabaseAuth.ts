@@ -42,5 +42,6 @@ export async function updateBrowserAuthSession(accessToken: string, refreshToken
 
 export async function clearBrowserAuthSession(): Promise<void> {
   if (!browserAuth) return;
-  await browserAuth.auth.signOut({ scope: 'local' });
+  const { error } = await browserAuth.auth.signOut({ scope: 'local' });
+  if (error) throw error;
 }

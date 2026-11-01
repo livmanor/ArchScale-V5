@@ -13,8 +13,9 @@
 3. Keep `ARCHSCALE_ENV=development`, `SUPABASE_URL` on `127.0.0.1`, and both database URLs on loopback. The application refuses non-loopback URLs in development mode.
 4. Run `npm ci`, then `npm run migrate:local`. This applies numbered migrations in order and baseline seeds. It is idempotent at the SQL-object/data level; review a migration before reapplying it to a database containing user data.
 5. Configure Supabase Auth email confirmations and SMTP in the local Supabase configuration. Local Supabase routes mail to Inbucket by default. For hosted environments, configure a verified SMTP provider in Supabase Auth and allow the `/accept` redirect URL under `ARCHSCALE_FRONTEND_URL`. The callback carries only Supabase's verified invite session in the URL fragment; the app token remains in server-verified Auth user metadata.
-6. Create or invite at least one user, create an active tenant membership and workspace, and enable the `tasks` and `attendance` entitlements before using those apps. Members can immediately check in/out for themselves; tenant-wide records and corrections remain restricted to authorized HR roles. The repository does not yet include the requested complete 11-member/3-tenant scenario seed.
-7. Start the API with `npm run dev:server`. In another terminal, run `npm run dev:ui`. Use email/password sign-in. Tokens stay in browser memory and are cleared on reload/logout.
+6. To enable Google login, enable Google under Supabase Authentication → Providers, register the OAuth callback URL shown by Supabase in your Google OAuth client, and set its client ID/secret in Supabase (never in Vite variables). Add `${ARCHSCALE_FRONTEND_URL}/auth/callback` to Supabase's allowed redirect URLs. Build the UI with the public Supabase URL and anon key available as `SUPABASE_URL`/`SUPABASE_ANON_KEY` or `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`.
+7. Create or invite at least one user, create an active tenant membership and workspace, and enable the `tasks` and `attendance` entitlements before using those apps. Members can immediately check in/out for themselves; tenant-wide records and corrections remain restricted to authorized HR roles. The repository does not yet include the requested complete 11-member/3-tenant scenario seed.
+8. Start the API with `npm run dev:server`. In another terminal, run `npm run dev:ui`. Use email/password or Google sign-in. App access tokens stay in memory and are cleared on reload/logout.
 
 ## Tests
 
@@ -34,7 +35,7 @@ The local database guard rejects non-loopback hosts. `npm run build` runs TypeSc
 1. Provision a separate Supabase project and record its exact project reference.
 2. Apply migrations `001` through `019` in numeric order with a privileged migration connection. Review SQL and inspect the target project before applying; do not run local test helpers against hosted data.
 3. Configure `ARCHSCALE_ENV=staging`, exact `ARCHSCALE_STAGING_PROJECT_REF`, the project's URL/anon key, the server-only service-role key, database admin URL and least-privilege runtime URL.
-4. Configure SMTP and allowed redirect URLs in Supabase Auth. Set `ARCHSCALE_FRONTEND_URL` to the deployed frontend origin.
+4. Configure SMTP and allowed redirect URLs in Supabase Auth. Set `ARCHSCALE_FRONTEND_URL` to the deployed frontend origin. For Google login, enable the Google provider, configure its OAuth client credentials in Supabase, allow the `/auth/callback` redirect, and provide only the public Supabase URL and anon key to the UI build.
 5. Build the UI with `npm run build:ui` and API with `npm run build`; deploy the Node server and generated static assets behind HTTPS. Keep service-role/database admin credentials only in server secrets.
 6. Create tenant entitlements and app authorization policies for each tenant, then verify access with separate users for each role. Do not treat the local fixture suite as proof of hosted isolation.
 
@@ -42,6 +43,7 @@ The local database guard rejects non-loopback hosts. `npm run build` runs TypeSc
 
 - Supabase project keys, SMTP credentials, verified sender/domain, and redirect URLs.
 - SMTP sender/domain verification and allowed redirect URLs must be configured in Supabase Auth before invitations can be delivered.
+- Google OAuth client credentials and the Google-authorized Supabase callback URL must be configured in Supabase before Google sign-in can be used.
 - Scenario membership provisioning until the dedicated idempotent seed script is completed.
 - Explicit, audited policy rows if platform staff are ever authorized to read tenant app records.
 - Live check-in/out requests persist immediately through context-bound APIs. Direct browser Supabase Realtime subscriptions remain disabled until a context-bound claim/RLS bridge is implemented.

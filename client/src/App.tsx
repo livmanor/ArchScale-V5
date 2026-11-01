@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import './styles/global.css';
 
 import { setToken, setRefreshToken, setContextId, logout } from './api/client';
+import { clearBrowserAuthSession } from './api/supabaseAuth';
 import { SessionContext, SessionData, ContextData } from './hooks/useSession';
 import { useToast } from './hooks/useToast';
 import { ToastList } from './components/Toast';
@@ -84,6 +85,8 @@ export const App: React.FC = () => {
 
   const handleLogout = async () => {
     try { await logout(context?.contextId); } catch { /* ignore network */ }
+    try { await clearBrowserAuthSession(); }
+    catch (error) { console.error('Failed to clear local Supabase auth session:', error); }
     setSession(null);
     setContext(null);
     setPickingContext(false);
