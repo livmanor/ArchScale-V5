@@ -112,3 +112,18 @@ CREATE TRIGGER attendance_self_update_guard
 
 REVOKE ALL ON FUNCTION public.fn_attendance_self_update_guard() FROM PUBLIC, anon, authenticated;
 GRANT INSERT ON public.attendance_records TO archscale_app_runtime;
+
+DO $$
+DECLARE
+    v_function RECORD;
+BEGIN
+    FOR v_function IN
+        SELECT p.oid::regprocedure AS signature
+          FROM pg_proc p
+         WHERE p.proname = 'gen_random_bytes'
+           AND pg_get_function_identity_arguments(p.oid) = 'integer'
+    LOOP
+        EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO archscale_app_runtime', v_function.signature);
+    END LOOP;
+END;
+$$;
