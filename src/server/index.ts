@@ -322,7 +322,7 @@ export function createServer(
                             }
                         }
                     }
-                } catch {}
+                } catch { }
             }
 
             if (!valid) {
@@ -350,12 +350,12 @@ export function createServer(
 
     app.post('/api/session/refresh', async (req: Request, res: Response) => {
         const refreshToken = req.body?.refreshToken;
-        if (typeof refreshToken !== 'string' || !refreshToken) return res.status(400).json({ error:'AUTH_REFRESH_TOKEN_REQUIRED' });
+        if (typeof refreshToken !== 'string' || !refreshToken) return res.status(400).json({ error: 'AUTH_REFRESH_TOKEN_REQUIRED' });
         try {
             const session = await (identityProvider || getIdentityProvider()).refresh(refreshToken);
-            return res.status(200).json({ accessToken:session.accessToken,refreshToken:session.refreshToken,principal:session.principal });
+            return res.status(200).json({ accessToken: session.accessToken, refreshToken: session.refreshToken, principal: session.principal });
         } catch {
-            return res.status(401).json({ error:'AUTH_REFRESH_FAILED' });
+            return res.status(401).json({ error: 'AUTH_REFRESH_FAILED' });
         }
     });
 
@@ -409,14 +409,14 @@ export function createServer(
             const client: PoolClient = await dbPool.connect();
             try {
                 await client.query('BEGIN');
-                await client.query('SELECT fn_set_app_context($1::uuid,$2::uuid,$3::text)', [context.contextId,principal.id,principal.sessionId]);
+                await client.query('SELECT fn_set_app_context($1::uuid,$2::uuid,$3::text)', [context.contextId, principal.id, principal.sessionId]);
                 const details = await client.query(`SELECT m.id AS membership_id,m.role_key,m.department,m.job_role,o.name AS organisation_name,o.portal,w.name AS workspace_name,ac.support_grant_id
                     FROM public.access_contexts ac JOIN public.memberships m ON m.id=ac.membership_id
                     JOIN public.organisations o ON o.id=ac.organisation_id JOIN public.workspaces w ON w.id=ac.workspace_id
                     WHERE ac.id=$1::uuid`, [context.contextId]);
                 await client.query('COMMIT');
                 return res.status(200).json({ context: { ...context, ...(details.rows[0] ?? {}) } });
-            } catch (error) { await client.query('ROLLBACK').catch(()=>{}); throw error; }
+            } catch (error) { await client.query('ROLLBACK').catch(() => { }); throw error; }
             finally { client.release(); }
         } catch (err: any) {
             return res.status(400).json({ error: err.message || 'AUTH_CONTEXT_CREATE_FAILED' });
@@ -446,10 +446,10 @@ export function createServer(
         const body = req.body || {};
         const contextId = body.contextId || req.headers['x-archscale-context'];
         if (contextId && typeof contextId === 'string') {
-            await revokeAccessContext(contextId, principal.id, principal.sessionId).catch(() => {});
+            await revokeAccessContext(contextId, principal.id, principal.sessionId).catch(() => { });
         }
         const accessToken = (req.headers['authorization'] as string).substring('Bearer '.length).trim();
-        await idp.revokeSession(accessToken).catch(() => {});
+        await idp.revokeSession(accessToken).catch(() => { });
         return res.status(200).json({ success: true });
     });
 
@@ -562,11 +562,11 @@ export function createServer(
         const principal: VerifiedPrincipal = (req as any).principal;
         const idp: IdentityProvider = (req as any).idp;
         if (String(req.params.id) !== principal.sessionId) {
-            return res.status(501).json({ error:'AUTH_SESSION_REVOCATION_UNSUPPORTED', message:'Supabase does not support revoking another device by session ID alone.' });
+            return res.status(501).json({ error: 'AUTH_SESSION_REVOCATION_UNSUPPORTED', message: 'Supabase does not support revoking another device by session ID alone.' });
         }
         const accessToken = (req.headers['authorization'] as string).substring('Bearer '.length).trim();
-        try { await idp.revokeSession(accessToken); return res.status(200).json({ success:true }); }
-        catch { return res.status(400).json({ error:'AUTH_SESSION_REVOKE_FAILED' }); }
+        try { await idp.revokeSession(accessToken); return res.status(200).json({ success: true }); }
+        catch { return res.status(400).json({ error: 'AUTH_SESSION_REVOKE_FAILED' }); }
     });
 
     app.delete('/api/me/sessions', authenticate, async (req: Request, res: Response) => {
@@ -575,7 +575,7 @@ export function createServer(
         try {
             const accessToken = (req.headers['authorization'] as string).substring('Bearer '.length).trim();
             await idp.revokeAllForUser(accessToken);
-            return res.status(200).json({ success:true });
+            return res.status(200).json({ success: true });
         } catch (err: any) {
             return res.status(500).json({ error: 'INTERNAL_SERVER_ERROR', message: err.message });
         }
@@ -600,7 +600,7 @@ export function createServer(
                 ]);
             } catch (ctxErr: any) {
                 console.error('fn_set_app_context failed:', ctxErr.message);
-                await client.query('ROLLBACK;').catch(() => {});
+                await client.query('ROLLBACK;').catch(() => { });
                 client.release();
                 return res.status(403).json({ error: 'AUTH_CONTEXT_INVALID' });
             }
@@ -621,13 +621,13 @@ export function createServer(
                     (req as any).contextDept = ctxRow.department;
                     (req as any).organisationId = ctxRow.organisation_id;
                 }
-            } catch {}
+            } catch { }
 
             let released = false;
             const cleanup = () => {
                 if (released) return;
                 released = true;
-                client.query('COMMIT;').catch(() => {});
+                client.query('COMMIT;').catch(() => { });
                 client.release();
             };
             res.once('finish', cleanup);
@@ -1345,12 +1345,14 @@ export function createServer(
             public.fn_app_member_label(t.assigned_to_membership_id) AS assigned_to_name,
             public.fn_app_member_label(t.reviewer_membership_id) AS reviewer_name
             FROM public.tasks t ORDER BY t.due_at NULLS LAST, t.created_at DESC`);
-        const tasks = result.rows.map((r: any) => ({ id:r.id, workId:r.work_id, title:r.title, description:r.description,
-            assignedToId:r.assigned_to_membership_id, assignedToName:r.assigned_to_name,
-            department:r.department, reviewerId:r.reviewer_membership_id, reviewerName:r.reviewer_name,
-            startDate:r.start_date, dueDateTime:r.due_at, priority:r.priority, status:r.status,
-            approvalStatus:r.approval_status, createdById:r.created_by_membership_id,
-            approvedById:r.approved_by_membership_id }));
+        const tasks = result.rows.map((r: any) => ({
+            id: r.id, workId: r.work_id, title: r.title, description: r.description,
+            assignedToId: r.assigned_to_membership_id, assignedToName: r.assigned_to_name,
+            department: r.department, reviewerId: r.reviewer_membership_id, reviewerName: r.reviewer_name,
+            startDate: r.start_date, dueDateTime: r.due_at, priority: r.priority, status: r.status,
+            approvalStatus: r.approval_status, createdById: r.created_by_membership_id,
+            approvedById: r.approved_by_membership_id
+        }));
         return res.status(200).json({ tasks });
     });
 
@@ -1358,42 +1360,42 @@ export function createServer(
         const client = (req as any).dbClient as PoolClient;
         const b = req.body || {};
         if (typeof b.title !== 'string' || b.title.trim().length < 3 || !b.assignedToId || !b.reviewerId || !b.department) {
-            return res.status(400).json({ error:'TASK_FIELDS_REQUIRED' });
+            return res.status(400).json({ error: 'TASK_FIELDS_REQUIRED' });
         }
         try {
             const result = await client.query(`INSERT INTO public.tasks(title,description,assigned_to_membership_id,department,reviewer_membership_id,start_date,due_at,priority,status,approval_status)
                 VALUES($1,$2,$3::uuid,$4,$5::uuid,COALESCE($6::date,CURRENT_DATE),$7::timestamptz,COALESCE($8,'Normal'),COALESCE($9,'To Do'),COALESCE($10,'Not Required')) RETURNING *`,
-                [b.title.trim(),b.description ?? '',b.assignedToId,b.department,b.reviewerId,b.startDate || null,b.dueDateTime || null,b.priority,b.status,b.approvalStatus]);
-            return res.status(201).json({ success:true, task:result.rows[0] });
-        } catch (err: any) { return res.status(403).json({ error:'TASK_CREATE_DENIED', message:err.message }); }
+                [b.title.trim(), b.description ?? '', b.assignedToId, b.department, b.reviewerId, b.startDate || null, b.dueDateTime || null, b.priority, b.status, b.approvalStatus]);
+            return res.status(201).json({ success: true, task: result.rows[0] });
+        } catch (err: any) { return res.status(403).json({ error: 'TASK_CREATE_DENIED', message: err.message }); }
     });
 
     app.patch('/api/tasks/:id', authenticate, requireContext, async (req: Request, res: Response) => {
         const client = (req as any).dbClient as PoolClient;
-        const fields: Record<string,string> = { status:'status', priority:'priority', title:'title', description:'description', assignedToId:'assigned_to_membership_id', reviewerId:'reviewer_membership_id', dueDateTime:'due_at' };
+        const fields: Record<string, string> = { status: 'status', priority: 'priority', title: 'title', description: 'description', assignedToId: 'assigned_to_membership_id', reviewerId: 'reviewer_membership_id', dueDateTime: 'due_at' };
         const values: unknown[] = []; const sets: string[] = [];
-        for (const [key,column] of Object.entries(fields)) if (Object.hasOwn(req.body || {},key)) {
-            values.push(req.body[key]); sets.push(`${column}=$${values.length}${['assigned_to_membership_id','reviewer_membership_id'].includes(column) ? '::uuid' : ''}`);
+        for (const [key, column] of Object.entries(fields)) if (Object.hasOwn(req.body || {}, key)) {
+            values.push(req.body[key]); sets.push(`${column}=$${values.length}${['assigned_to_membership_id', 'reviewer_membership_id'].includes(column) ? '::uuid' : ''}`);
         }
-        if (!sets.length) return res.status(400).json({ error:'NO_TASK_FIELDS' });
+        if (!sets.length) return res.status(400).json({ error: 'NO_TASK_FIELDS' });
         values.push(req.params.id);
         try {
-            const result = await client.query(`UPDATE public.tasks SET ${sets.join(',')} WHERE id=$${values.length}::uuid RETURNING *`,values);
-            if (!result.rowCount) return res.status(404).json({ error:'TASK_NOT_FOUND' });
-            return res.status(200).json({ success:true, task:result.rows[0] });
-        } catch (err:any) { return res.status(403).json({ error:'TASK_EDIT_DENIED', message:err.message }); }
+            const result = await client.query(`UPDATE public.tasks SET ${sets.join(',')} WHERE id=$${values.length}::uuid RETURNING *`, values);
+            if (!result.rowCount) return res.status(404).json({ error: 'TASK_NOT_FOUND' });
+            return res.status(200).json({ success: true, task: result.rows[0] });
+        } catch (err: any) { return res.status(403).json({ error: 'TASK_EDIT_DENIED', message: err.message }); }
     });
 
     app.post('/api/tasks/:id/approve', authenticate, requireContext, async (req: Request, res: Response) => {
         const client = (req as any).dbClient as PoolClient;
         const status = (req.body || {}).approvalStatus;
-        if (!['Approved','Rejected'].includes(status)) return res.status(400).json({ error:'INVALID_APPROVAL_STATUS' });
+        if (!['Approved', 'Rejected'].includes(status)) return res.status(400).json({ error: 'INVALID_APPROVAL_STATUS' });
         try {
-            const actor = await client.query('SELECT membership_id FROM public.access_contexts WHERE id=$1::uuid',[ (req as any).contextId ]);
-            const result = await client.query(`UPDATE public.tasks SET approval_status=$1, approved_by_membership_id=$2::uuid WHERE id=$3::uuid RETURNING *`,[status,actor.rows[0]?.membership_id,req.params.id]);
-            if (!result.rowCount) return res.status(404).json({ error:'TASK_NOT_FOUND' });
-            return res.status(200).json({ success:true, task:result.rows[0] });
-        } catch (err:any) { return res.status(403).json({ error:'TASK_APPROVAL_DENIED', message:err.message }); }
+            const actor = await client.query('SELECT membership_id FROM public.access_contexts WHERE id=$1::uuid', [(req as any).contextId]);
+            const result = await client.query(`UPDATE public.tasks SET approval_status=$1, approved_by_membership_id=$2::uuid WHERE id=$3::uuid RETURNING *`, [status, actor.rows[0]?.membership_id, req.params.id]);
+            if (!result.rowCount) return res.status(404).json({ error: 'TASK_NOT_FOUND' });
+            return res.status(200).json({ success: true, task: result.rows[0] });
+        } catch (err: any) { return res.status(403).json({ error: 'TASK_APPROVAL_DENIED', message: err.message }); }
     });
 
     // --- TEST APPLICATION B: ATTENDANCE (HR RECORDS + MEMBER SELF-SERVICE) ---
@@ -1447,33 +1449,39 @@ export function createServer(
                 FROM public.attendance_comments c WHERE c.attendance_record_id=r.id),'[]'::jsonb) AS hr_comments
             FROM public.attendance_records r ORDER BY r.attendance_date DESC,r.membership_id`);
         const today = await client.query<{ today: string }>('SELECT CURRENT_DATE::text AS today');
-        return res.status(200).json({ today: today.rows[0]?.today, records: result.rows.map((r:any)=>({ id:r.id,attendanceId:r.attendance_id,memberId:r.membership_id,
-            memberName:r.member_name,department:r.department,date:r.attendance_date,checkInTime:r.check_in,checkOutTime:r.check_out,
-            status:r.status,remarks:r.remarks,hrComments:r.hr_comments,createdBy:r.created_by_membership_id,lastUpdatedBy:r.last_updated_by_membership_id })) });
+        return res.status(200).json({
+            today: today.rows[0]?.today, records: result.rows.map((r: any) => ({
+                id: r.id, attendanceId: r.attendance_id, memberId: r.membership_id,
+                memberName: r.member_name, department: r.department, date: r.attendance_date, checkInTime: r.check_in, checkOutTime: r.check_out,
+                status: r.status, remarks: r.remarks, hrComments: r.hr_comments, createdBy: r.created_by_membership_id, lastUpdatedBy: r.last_updated_by_membership_id
+            }))
+        });
     });
 
     app.patch('/api/attendance/:id', authenticate, requireContext, async (req: Request, res: Response) => {
-        const client = (req as any).dbClient as PoolClient; const b=req.body||{};
-        const allowed:Record<string,string>={status:'status',checkInTime:'check_in',checkOutTime:'check_out',remarks:'remarks'};
-        const vals:unknown[]=[];const sets:string[]=[];
-        for(const [key,col] of Object.entries(allowed))if(Object.hasOwn(b,key)){vals.push(b[key]);sets.push(`${col}=$${vals.length}`)}
-        if(!sets.length)return res.status(400).json({error:'NO_ATTENDANCE_FIELDS'});
+        const client = (req as any).dbClient as PoolClient; const b = req.body || {};
+        const allowed: Record<string, string> = { status: 'status', checkInTime: 'check_in', checkOutTime: 'check_out', remarks: 'remarks' };
+        const vals: unknown[] = []; const sets: string[] = [];
+        for (const [key, col] of Object.entries(allowed)) if (Object.hasOwn(b, key)) { vals.push(b[key]); sets.push(`${col}=$${vals.length}`) }
+        if (!sets.length) return res.status(400).json({ error: 'NO_ATTENDANCE_FIELDS' });
         vals.push(req.params.id);
-        try{const result=await client.query(`UPDATE public.attendance_records SET ${sets.join(',')} WHERE id=$${vals.length}::uuid RETURNING *`,vals);
-            if(!result.rowCount)return res.status(404).json({error:'ATTENDANCE_RECORD_NOT_FOUND'});
-            return res.status(200).json({success:true,record:result.rows[0]});
-        }catch(err:any){return res.status(403).json({error:'ATTENDANCE_EDIT_DENIED',message:err.message})}
+        try {
+            const result = await client.query(`UPDATE public.attendance_records SET ${sets.join(',')} WHERE id=$${vals.length}::uuid RETURNING *`, vals);
+            if (!result.rowCount) return res.status(404).json({ error: 'ATTENDANCE_RECORD_NOT_FOUND' });
+            return res.status(200).json({ success: true, record: result.rows[0] });
+        } catch (err: any) { return res.status(403).json({ error: 'ATTENDANCE_EDIT_DENIED', message: err.message }) }
     });
 
     app.post('/api/attendance/:id/comment', authenticate, requireContext, async (req: Request, res: Response) => {
-        const client=(req as any).dbClient;const comment=(req.body||{}).comment;
-        if(typeof comment!=='string'||!comment.trim())return res.status(400).json({error:'COMMENT_REQUIRED'});
-        try{const result=await client.query(`INSERT INTO public.attendance_comments(attendance_record_id,organisation_id,author_membership_id,body)
+        const client = (req as any).dbClient; const comment = (req.body || {}).comment;
+        if (typeof comment !== 'string' || !comment.trim()) return res.status(400).json({ error: 'COMMENT_REQUIRED' });
+        try {
+            const result = await client.query(`INSERT INTO public.attendance_comments(attendance_record_id,organisation_id,author_membership_id,body)
             SELECT r.id,r.organisation_id,ac.membership_id,$2 FROM public.attendance_records r JOIN public.access_contexts ac ON ac.id=$3::uuid WHERE r.id=$1::uuid RETURNING id,author_membership_id,body,created_at`,
-            [req.params.id,comment.trim(),(req as any).contextId]);
-            if(!result.rowCount)return res.status(404).json({error:'ATTENDANCE_RECORD_NOT_FOUND'});
-            const c=result.rows[0];return res.status(201).json({success:true,comment:{id:c.id,authorId:c.author_membership_id,text:c.body,timestamp:c.created_at}});
-        }catch(err:any){return res.status(403).json({error:'ATTENDANCE_COMMENT_DENIED',message:err.message})}
+                [req.params.id, comment.trim(), (req as any).contextId]);
+            if (!result.rowCount) return res.status(404).json({ error: 'ATTENDANCE_RECORD_NOT_FOUND' });
+            const c = result.rows[0]; return res.status(201).json({ success: true, comment: { id: c.id, authorId: c.author_membership_id, text: c.body, timestamp: c.created_at } });
+        } catch (err: any) { return res.status(403).json({ error: 'ATTENDANCE_COMMENT_DENIED', message: err.message }) }
     });
 
     // 404 handler

@@ -21,3 +21,4 @@ if (!dbIndex.includes("runtimePool.on('error'")) {
   fs.writeFileSync('src/db/index.ts', dbIndex, 'utf8');
   console.log('Patched src/db/index.ts');
 }
+
