@@ -12,7 +12,7 @@ const browserAuth: SupabaseClient | null = googleOAuthConfigured
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,
-        storage: window.sessionStorage,
+        storage: window.localStorage,
       },
     })
   : null;
@@ -32,15 +32,26 @@ export async function beginGoogleSignIn(): Promise<string | null> {
 export async function getOAuthCallbackSession(): Promise<{ session: Session | null; error: string | null }> {
   if (!browserAuth) return { session: null, error: 'Google sign-in is not configured for this application.' };
   try {
+    // 1. Supabase automatically exchanges the code when detectSessionInUrl is true.
+    // Check if the session is already established by initializePromise.
+    const { data: initialData } = await browserAuth.auth.getSession();
+    if (initialData?.session) {
+      return { session: initialData.session, error: null };
+    }
+
+    // 2. If not yet resolved and code is present, exchange explicitly.
     const searchParams = new URLSearchParams(window.location.search);
     const code = searchParams.get('code');
     if (code) {
       const { data, error } = await browserAuth.auth.exchangeCodeForSession(code);
-      if (error) return { session: null, error: error.message };
       if (data?.session) return { session: data.session, error: null };
+      if (error) {
+        const retry = await browserAuth.auth.getSession();
+        if (retry.data?.session) return { session: retry.data.session, error: null };
+        return { session: null, error: error.message };
+      }
     }
-    const { data, error } = await browserAuth.auth.getSession();
-    return { session: data.session, error: error?.message ?? null };
+    return { session: null, error: 'No authenticated session returned from Google.' };
   } catch (err: any) {
     return { session: null, error: err?.message || 'Failed to exchange OAuth session.' };
   }
