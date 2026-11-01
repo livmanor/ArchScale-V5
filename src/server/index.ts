@@ -901,6 +901,117 @@ export function createServer(
         return res.status(200).json({ decision, auditLogs: audit.rows });
     });
 
+    // --- PLATFORM RBAC MATRIX & PERMISSION MANAGEMENT ---
+    app.get('/api/platform/rbac/matrix', authenticate, requireContext, async (req: Request, res: Response) => {
+        const principal: VerifiedPrincipal = (req as any).principal;
+        const contextId: string = (req as any).contextId;
+        const client = (req as any).dbClient as PoolClient;
+
+        const decision = await decide(client, principal, contextId, 'platform.roles.manage');
+        if (!decision.allow) {
+            return res.status(403).json({ error: decision.reasonCode, decision });
+        }
+
+        try {
+            const rolesRes = await client.query(`
+                SELECT key, name, description, portal, level, min_aal, is_active
+                FROM public.roles
+                ORDER BY portal, level DESC, key;
+            `);
+
+            const permsRes = await client.query(`
+                SELECT key, name, description, min_aal
+                FROM public.permissions
+                ORDER BY key;
+            `);
+
+            const grantsRes = await client.query(`
+                SELECT role_key, permission_key
+                FROM public.role_permissions;
+            `);
+
+            const grants: Record<string, string[]> = {};
+            for (const r of rolesRes.rows) {
+                grants[r.key] = [];
+            }
+            for (const row of grantsRes.rows) {
+                if (!grants[row.role_key]) grants[row.role_key] = [];
+                grants[row.role_key].push(row.permission_key);
+            }
+
+            return res.status(200).json({
+                success: true,
+                roles: rolesRes.rows,
+                permissions: permsRes.rows,
+                grants,
+            });
+        } catch (err: any) {
+            return res.status(500).json({ error: err.message });
+        }
+    });
+
+    app.post('/api/platform/rbac/grant', authenticate, requireContext, async (req: Request, res: Response) => {
+        const principal: VerifiedPrincipal = (req as any).principal;
+        const contextId: string = (req as any).contextId;
+        const client = (req as any).dbClient as PoolClient;
+        const body = req.body || {};
+
+        const decision = await decide(client, principal, contextId, 'platform.roles.manage', { isMutation: true });
+        if (!decision.allow) {
+            return res.status(403).json({ error: decision.reasonCode, decision });
+        }
+
+        const { roleKey, permissionKey } = body;
+        if (!roleKey || !permissionKey) {
+            return res.status(400).json({ error: 'ROLE_AND_PERMISSION_REQUIRED' });
+        }
+
+        try {
+            await client.query(`
+                INSERT INTO public.role_permissions (role_key, permission_key)
+                VALUES ($1, $2)
+                ON CONFLICT (role_key, permission_key) DO NOTHING;
+            `, [roleKey, permissionKey]);
+
+            return res.status(200).json({ success: true, roleKey, permissionKey });
+        } catch (err: any) {
+            return res.status(400).json({ error: err.message });
+        }
+    });
+
+    app.post('/api/platform/rbac/revoke', authenticate, requireContext, async (req: Request, res: Response) => {
+        const principal: VerifiedPrincipal = (req as any).principal;
+        const contextId: string = (req as any).contextId;
+        const client = (req as any).dbClient as PoolClient;
+        const body = req.body || {};
+
+        const decision = await decide(client, principal, contextId, 'platform.roles.manage', { isMutation: true });
+        if (!decision.allow) {
+            return res.status(403).json({ error: decision.reasonCode, decision });
+        }
+
+        const { roleKey, permissionKey } = body;
+        if (!roleKey || !permissionKey) {
+            return res.status(400).json({ error: 'ROLE_AND_PERMISSION_REQUIRED' });
+        }
+
+        // Safety invariant: Do not revoke core governance rights from founder
+        if (roleKey === 'founder' && ['platform.roles.manage', 'platform.organisations.manage', 'platform.organisations.approve'].includes(permissionKey)) {
+            return res.status(400).json({ error: 'CANNOT_REVOKE_ROOT_FOUNDER_PERMISSION', message: 'Root governance permissions cannot be removed from Founder role' });
+        }
+
+        try {
+            await client.query(`
+                DELETE FROM public.role_permissions
+                WHERE role_key = $1 AND permission_key = $2;
+            `, [roleKey, permissionKey]);
+
+            return res.status(200).json({ success: true, roleKey, permissionKey });
+        } catch (err: any) {
+            return res.status(400).json({ error: err.message });
+        }
+    });
+
     // --- FRONTSTAGE (TENANT) ROUTES ---
     app.get('/api/org/members', authenticate, requireContext, async (req: Request, res: Response) => {
         const principal: VerifiedPrincipal = (req as any).principal;
