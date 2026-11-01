@@ -6,21 +6,38 @@
 -- their own attendance without schema constraint errors or missing runtime permissions.
 -- =============================================================================
 
--- 1. Ensure attendance_records legacy columns are nullable and have default values
+-- 1. Conditionally relax legacy columns if present
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='attendance_records' AND column_name='tenant_id') THEN
+        ALTER TABLE public.attendance_records ALTER COLUMN tenant_id DROP NOT NULL;
+        ALTER TABLE public.attendance_records ALTER COLUMN tenant_id SET DEFAULT NULL;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='attendance_records' AND column_name='date') THEN
+        ALTER TABLE public.attendance_records ALTER COLUMN date DROP NOT NULL;
+        ALTER TABLE public.attendance_records ALTER COLUMN date SET DEFAULT NULL;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='tasks' AND column_name='tenant_id') THEN
+        ALTER TABLE public.tasks ALTER COLUMN tenant_id DROP NOT NULL;
+        ALTER TABLE public.tasks ALTER COLUMN tenant_id SET DEFAULT NULL;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='tasks' AND column_name='work_id') THEN
+        ALTER TABLE public.tasks ALTER COLUMN work_id DROP NOT NULL;
+        ALTER TABLE public.tasks ALTER COLUMN work_id SET DEFAULT NULL;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='tasks' AND column_name='task_title') THEN
+        ALTER TABLE public.tasks ALTER COLUMN task_title DROP NOT NULL;
+        ALTER TABLE public.tasks ALTER COLUMN task_title SET DEFAULT NULL;
+    END IF;
+END $$;
+
+-- 2. Ensure standard column defaults and nullability
 ALTER TABLE public.attendance_records
-    ALTER COLUMN tenant_id DROP NOT NULL,
-    ALTER COLUMN date DROP NOT NULL,
     ALTER COLUMN department DROP NOT NULL,
     ALTER COLUMN department SET DEFAULT 'General',
     ALTER COLUMN attendance_id SET DEFAULT ('ATT-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 12)));
 
--- 2. Ensure tasks legacy columns are nullable
-ALTER TABLE public.tasks
-    ALTER COLUMN tenant_id DROP NOT NULL,
-    ALTER COLUMN work_id DROP NOT NULL,
-    ALTER COLUMN task_title DROP NOT NULL;
-
--- 3. Update the actor-binding trigger to synchronise legacy columns and defaults
+-- 3. Update the actor-binding trigger to synchronise standard columns
 CREATE OR REPLACE FUNCTION public.fn_app_bind_record_actor()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -47,9 +64,6 @@ BEGIN
             NEW.created_by_membership_id := v_actor;
             NEW.organisation_id := v_org;
             NEW.workspace_id := v_workspace;
-            NEW.tenant_id := v_org;
-            NEW.work_id := COALESCE(NEW.work_id, 'WRK-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 12)));
-            NEW.task_title := COALESCE(NEW.task_title, NEW.title);
         ELSIF NEW.organisation_id <> OLD.organisation_id OR NEW.workspace_id <> OLD.workspace_id OR NEW.created_by_membership_id <> OLD.created_by_membership_id THEN
             RAISE EXCEPTION 'Task creator and tenant scope are immutable';
         END IF;
@@ -67,8 +81,6 @@ BEGIN
             NEW.workspace_id := v_workspace;
             NEW.created_by_membership_id := v_actor;
             NEW.last_updated_by_membership_id := v_actor;
-            NEW.tenant_id := v_org;
-            NEW.date := COALESCE(NEW.attendance_date, CURRENT_DATE);
             NEW.department := COALESCE(NEW.department, 'General');
             NEW.attendance_id := COALESCE(NEW.attendance_id, 'ATT-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 12)));
         ELSE
