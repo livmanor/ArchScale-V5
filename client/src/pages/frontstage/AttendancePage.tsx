@@ -227,7 +227,7 @@ export const AttendancePage: React.FC = () => {
               <div><span style={{ color: 'var(--color-text-muted)' }}>Permissions:</span> <Badge variant={isHRManager ? 'success' : 'warning'}>{isHRManager ? 'Can Edit' : 'Read Only'}</Badge></div>
             </div>
 
-            <FormField label="Status" hint={!isHRManager ? "Read-only for Junior HR" : undefined}>
+            <FormField label="Status" hint={!isHRManager ? 'Read-only' : undefined}>
               <SelectInput
                 value={editStatus}
                 onChange={e => setEditStatus(e.target.value)}

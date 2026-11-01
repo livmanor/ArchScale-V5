@@ -599,7 +599,7 @@ describe('Invitations Engine API Integration Tests', () => {
         expect(acceptRes.status).toBe(200);
     });
 
-    it('14. invite link keeps the app token in the query through Supabase Auth redirects', async () => {
+    it('14. invite link keeps the secret app token out of the URL', async () => {
         const FRAG_EMAIL = 'frag.check@inv.local';
         const res = await fetch(`${baseUrl}/api/org/invitations`, {
             method: 'POST',
@@ -617,10 +617,11 @@ describe('Invitations Engine API Integration Tests', () => {
 
         const sent = getSentMails();
         const latest = sent[sent.length - 1];
-        expect(latest.inviteUrl).toContain('/accept?token=');
+        expect(latest.inviteUrl).toMatch(/\/accept$/);
+        expect(latest.inviteUrl).not.toContain(latest.rawToken);
+        expect(latest.inviteUrl).not.toContain('?token=');
         expect(latest.inviteUrl).not.toContain('#token=');
-        expect(new URL(latest.inviteUrl).searchParams.get('token')).toBe(latest.rawToken);
-        expect(latest.body).toContain('/accept?token=');
+        expect(latest.body).toContain('/accept');
     });
 
     it('15. inviter suspended after sending then accept fails (B0.6 item 4)', async () => {

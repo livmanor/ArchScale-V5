@@ -147,7 +147,7 @@ export class SupabaseProvider implements IdentityProvider {
         // Extract and validate AAL level
         const aal: AalLevel = (claims.aal || claims.app_metadata?.aal || 'aal1') as AalLevel;
 
-        return {
+        const principal: VerifiedPrincipal = {
             id: userData.user.id,
             email: userData.user.email || claims.email || '',
             sessionId,
@@ -156,6 +156,11 @@ export class SupabaseProvider implements IdentityProvider {
             audience: claims.aud,
             expiresAt: claims.exp
         };
+        Object.defineProperty(principal, 'userMetadata', {
+            value: userData.user.user_metadata || {},
+            enumerable: false
+        });
+        return principal;
     }
 
     async refresh(refreshToken: string): Promise<AuthSession> {

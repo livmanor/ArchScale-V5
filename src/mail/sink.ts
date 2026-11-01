@@ -22,9 +22,9 @@ export interface SendInvitationOptions {
 export async function sendInvitationMail(options: SendInvitationOptions): Promise<{ success: boolean; messageId: string; inviteUrl: string }> {
     const isolatedTest = process.env.NODE_ENV === 'test' && process.env.ALLOW_LOCAL_AUTH === 'true';
     const baseUrl = (process.env.ARCHSCALE_FRONTEND_URL || 'http://127.0.0.1:3000').replace(/\/+$/, '');
-    const inviteUrl = `${baseUrl}/accept?token=${encodeURIComponent(options.rawToken)}`;
+    const inviteUrl = `${baseUrl}/accept`;
     const orgName = options.organisationName || 'ArchScale';
-    const body = `You have been invited to join ${orgName}.\n\nAccept your invitation by visiting:\n${inviteUrl}\n\nThis invitation link contains your secret token.`;
+    const body = `You have been invited to join ${orgName}.\n\nAccept your invitation by visiting:\n${inviteUrl}`;
 
     if (!isolatedTest && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
         try {

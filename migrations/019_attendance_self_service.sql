@@ -34,10 +34,14 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.fn_attendance_self_access(UUID, UUID, UUID, TEXT) TO archscale_app_runtime;
+REVOKE ALL ON FUNCTION public.fn_attendance_self_access(UUID, UUID, UUID, TEXT) FROM PUBLIC, anon, authenticated;
 
 DROP POLICY IF EXISTS attendance_self_select_policy ON public.attendance_records;
 CREATE POLICY attendance_self_select_policy ON public.attendance_records FOR SELECT TO archscale_app_runtime
-USING (public.fn_attendance_self_access(organisation_id, workspace_id, membership_id, department));
+USING (
+    attendance_date = CURRENT_DATE
+    AND public.fn_attendance_self_access(organisation_id, workspace_id, membership_id, department)
+);
 
 DROP POLICY IF EXISTS attendance_self_insert_policy ON public.attendance_records;
 CREATE POLICY attendance_self_insert_policy ON public.attendance_records FOR INSERT TO archscale_app_runtime
@@ -106,4 +110,5 @@ CREATE TRIGGER attendance_self_update_guard
     BEFORE UPDATE ON public.attendance_records
     FOR EACH ROW EXECUTE FUNCTION public.fn_attendance_self_update_guard();
 
+REVOKE ALL ON FUNCTION public.fn_attendance_self_update_guard() FROM PUBLIC, anon, authenticated;
 GRANT INSERT ON public.attendance_records TO archscale_app_runtime;

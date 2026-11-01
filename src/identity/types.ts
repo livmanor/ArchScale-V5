@@ -8,6 +8,7 @@ export interface VerifiedPrincipal {
     issuer: string;
     audience: string;
     expiresAt: number; // Unix timestamp (seconds)
+    userMetadata?: Record<string, unknown>;
 }
 
 export interface AuthSession {

@@ -457,8 +457,8 @@ export function createServer(
     app.post('/api/invitations/accept', authenticate, async (req: Request, res: Response) => {
         const principal: VerifiedPrincipal = (req as any).principal;
         const body = req.body || {};
-        const token = body.token;
-        if (!token || typeof token !== 'string') {
+        const token = body.token ?? principal.userMetadata?.raw_token;
+        if (typeof token !== 'string' || !token.trim()) {
             return res.status(400).json({ error: 'TOKEN_REQUIRED', message: 'Invitation token is required' });
         }
 

@@ -19,13 +19,14 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
   const [notice, setNotice] = useState<string | null>(null);
   const [recoveryEmail, setRecoveryEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [isInvitationPage] = useState(() => window.location.pathname === '/accept');
   const [invitationToken] = useState(() =>
     new URLSearchParams(window.location.search).get('token') ??
     new URLSearchParams(window.location.hash.slice(1)).get('token')
   );
   const [invitationAuthToken] = useState(() => {
     const fragment = new URLSearchParams(window.location.hash.slice(1));
-    return invitationToken && fragment.get('type') === 'invite' ? fragment.get('access_token') : null;
+    return isInvitationPage && fragment.get('type') === 'invite' ? fragment.get('access_token') : null;
   });
   const [resetToken] = useState(() => {
     const fragment = new URLSearchParams(window.location.hash.slice(1));
@@ -45,9 +46,9 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
   const [password, setPassword] = useState('');
 
   const completeLogin = async (session: SessionData) => {
-    if (invitationToken) {
+    if (isInvitationPage || invitationToken) {
       setLoading(true);
-      const accepted = await acceptInvitation(invitationToken);
+      const accepted = await acceptInvitation(invitationToken ?? undefined);
       setLoading(false);
       if (!accepted.ok) {
         setError(accepted.message);
@@ -239,10 +240,10 @@ export const LoginPage: React.FC<LoginProps> = ({ onSuccess }) => {
 
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 24px' }}>
         <h1 style={{ fontSize: 'var(--font-size-h1)', marginBottom: 24 }}>
-          {recoveryMode === 'request' ? 'Reset your password' : recoveryMode === 'reset' ? 'Choose a new password' : invitationToken ? 'Accept invitation' : 'Sign in'}
+          {recoveryMode === 'request' ? 'Reset your password' : recoveryMode === 'reset' ? 'Choose a new password' : isInvitationPage || invitationToken ? 'Accept invitation' : 'Sign in'}
         </h1>
 
-        {invitationToken && recoveryMode === 'login' && <Alert kind="info" style={{ marginBottom: 20 }}>Sign in to accept your invitation.</Alert>}
+        {(isInvitationPage || invitationToken) && recoveryMode === 'login' && <Alert kind="info" style={{ marginBottom: 20 }}>Sign in to accept your invitation.</Alert>}
 
         {notice && <Alert kind="info" style={{ marginBottom: 20 }}>{notice}</Alert>}
         {error && <Alert kind="error" style={{ marginBottom: 20 }}>{error}</Alert>}
